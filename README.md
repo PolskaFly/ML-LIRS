@@ -9,4 +9,4 @@ Things that I'm working on:
 
 -How to then use a completed model for prediction.
 
--Afterwards, optimization (currently optimized well).
+-Afterwards, optimization (currently not optimized well).
