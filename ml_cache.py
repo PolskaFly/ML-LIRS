@@ -29,7 +29,7 @@ class LogisticRegression(torch.nn.Module):
 
 
 trace = []
-with codecs.open("/Users/polskafly/Desktop/REU/traces/multi2.trc", "r", "UTF8") as inputFile:
+with codecs.open("/Users/polskafly/Desktop/REU/traces/2_pools.trc", "r", "UTF8") as inputFile:
     inputFile = inputFile.readlines()
 for line in inputFile:
     trace.append(int(line))
