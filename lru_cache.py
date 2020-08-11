@@ -3,7 +3,7 @@ class lru_cache:
         self.faults = 0
         self.hits = 0
 
-    def set(self, key: int, value: int, cache, virtual_time: int) -> None:
+    def set(self, key: int, value: int, cache, virtual_time: int, features) -> None:
         if key in cache.cache:
             self.hits += 1
             cache.set_cache(key, value, virtual_time)

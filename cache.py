@@ -14,5 +14,8 @@ class cache():
     def move_key(self, key: int):
         self.cache.move_to_end(key)
 
+    def pop(self, key):
+        self.cache.popitem(key)
+
     def get_items(self):
         return self.cache.items()
