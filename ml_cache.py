@@ -8,14 +8,7 @@ from lru_cache import lru_cache as lru
 import codecs
 from collections import OrderedDict
 import numpy as np
-
-#Does each piece of memory in the cache have data about itself? I think so.
-#Sliding memory takes in a certain amount of this data and trains the model off of it?
-
-# Figure out how to implement a sliding memory window to gather data and for labeling. Reuse Distance: After access,
-# anything that is above it in the stack is the reuse distance. Recency: Current Virtual Time - Accessed Virtual time
-# (Only storing 1 value for the last access) Possibly in future add more access for more data? Train a model. Use
-# that model for removal.
+import virtualtime
 
 
 class LogisticRegression(torch.nn.Module):
@@ -29,7 +22,7 @@ class LogisticRegression(torch.nn.Module):
 
 
 trace = []
-with codecs.open("/Users/polskafly/Desktop/REU/traces/2_pools.trc", "r", "UTF8") as inputFile:
+with codecs.open("/Users/polskafly/Desktop/REU/traces/sprite.trc", "r", "UTF8") as inputFile:
     inputFile = inputFile.readlines()
 for line in inputFile:
     trace.append(int(line))
@@ -49,9 +42,15 @@ for i in range(trials):
     virtual_time = 0
     trained = False
     LRU = lru()
-    print(LRU.get_hits())
     hits = 0
     faults = 0
+
+    # current_cache.set_cache(10, 5, 10, 5, False)
+    # current_cache.set_cache(6,9, 10, 5, False)
+    #
+    # print(current_cache.cache)
+    # print(current_cache.cache[list(current_cache.cache.keys())[-1]][1])
+
     for j in range(len(trace)):
         virtual_time += 1
 
@@ -68,11 +67,9 @@ for i in range(trials):
                 elif hasChecked:
                     reuse += 1
 
-            recency = virtual_time - current_cache.cache[trace[j]][1]
-            features[trace[j]] = [reuse, recency, max(recency, reuse)]
+            recency = virtual_time - current_cache.get_access(trace[j])
             training_features.append([reuse, recency, max(recency, reuse)])
         if len(training_features) >= 500:
-
             for i in range(len(training_features)):
                 if training_features[i][1] > sliding_memory_size:
                     training_labels.append([0])
@@ -86,7 +83,7 @@ for i in range(trials):
             train_ds = TensorDataset(ttraining_features, ttraining_labels)
 
             batch_size = 30
-            train_dl = DataLoader(train_ds, batch_size, shuffle=False)
+            train_dl = DataLoader(train_ds, batch_size, shuffle=True)
             next(iter(train_dl))
 
             model = LogisticRegression(3, 1)
@@ -111,25 +108,33 @@ for i in range(trials):
                     optimizer.step()
 
             trained = True
+
             training_features.clear()
             training_labels.clear()
 
         if not trained:
-            LRU.set(trace[j], trace[j], current_cache, virtual_time, features)
+            LRU.set(trace[j], trace[j], current_cache, virtual_time)
         else:
-            if trace[j] in current_cache.cache:
+            if hasChecked:
                 hits += 1
-                current_cache.set_cache(trace[j], trace[j], virtual_time)
+                current_cache.set_cache(trace[j], trace[j], reuse, recency)
             elif len(current_cache.cache) < current_cache.get_capacity():
                 faults += 1
-                current_cache.set_cache(trace[j], trace[j], virtual_time)
+                current_cache.set_cache(trace[j], trace[j], 0, virtual_time)
             elif len(current_cache.cache) >= current_cache.get_capacity():
-                for key, value in features.items():
-                    if key in current_cache.cache:
-                        if model(torch.from_numpy(np.array(features[key])).float()) <= .1:
-                            current_cache.pop(key)
-                            current_cache.set_cache(trace[j], trace[j], virtual_time)
-                            break
+                if model(torch.from_numpy(np.array(current_cache.cache[list(current_cache.cache.keys())[0]][1])).float()) > .5:
+                    for key in list(current_cache.cache.keys()):
+                        if current_cache.get_access(key) > sliding_memory_size:
+                            current_cache.set_cache(key, key, 1 + (sliding_memory_size * 2), sliding_memory_size * 2)
+                        else:
+                            current_cache.set_cache(key, key, sliding_memory_size * 2, virtual_time - current_cache.get_access(key))
+
+                        if model(torch.from_numpy(np.array(current_cache.cache[key][1])).float()) >= .5:
+                            current_cache.cache.move_to_end(key)
+
+                current_cache.pop(list(current_cache.cache.keys())[0])
+                current_cache.set_cache(trace[j], trace[j], sliding_memory_size * 2, virtual_time, virtual_time)
+
                 faults += 1
 
     print(LRU.get_hits())
@@ -138,6 +143,5 @@ for i in range(trials):
     print("Total H", LRU.get_hits() + hits)
     print("Total F", LRU.get_faults() + faults)
 
-
-print(training_features)
-print(training_labels)
+print(current_cache.cache)
+print("Features", training_features)
