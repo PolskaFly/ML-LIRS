@@ -1,12 +1,11 @@
-# linear_regression_cache
-Linear regression cache replacement model.
+# machine-learned-cache
 
-Currently not working. 
+Issues:
 
-Things that I'm working on:
+-Not all cached blocks have features and therefore cannot be evicted.
 
--Figuring out what data to collect and how.
+-Need to make changes to labeling.
 
--How to then use a completed model for prediction.
+-Belady boundary needs work.
 
--Afterwards, optimization (currently not optimized well).
+
