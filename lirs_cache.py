@@ -60,13 +60,7 @@ PG_HITS = 0
 PG_FAULTS = 0
 free_mem = MAX_MEMORY
 
-lir_stack[0] = [1]
-lir_stack[1] = [2]
-lir_stack[2] = [3]
-
-# lir_stack.move_to_end(list(lir_stack)[0])
-# lir_stack.popitem(last=True)
-# print(lir_stack)
+#Possible big issue. I don't move HIR stack objects into LIR stack.
 
 for i in range(len(trace)):
     ref_block = trace[i]
@@ -77,19 +71,18 @@ for i in range(len(trace)):
             lir_stack.move_to_end(ref_block)
         elif pg_table[ref_block][2] and pg_table[ref_block][3]:
             #Check if HIR is full before popping if I don't get same results as prof.
-            hir_stack.popitem(last=False)
-            print(pg_table[ref_block])
+            if len(hir_stack) == HIR_SIZE:
+                hir_stack.popitem(last=False)
             set_recency(pg_table, list(lir_stack.keys())[0], False)
             set_hir_block(pg_table, list(lir_stack.keys())[0], True)
             hir_stack[list(lir_stack.keys())[0]] = pg_table[list(lir_stack.keys())[0]]
             lir_stack.move_to_end(list(lir_stack.keys())[0])
             lir_stack.popitem(last=True)
 
-            print(pg_table[ref_block])
-
             lir_stack.move_to_end(ref_block)
             set_hir_block(pg_table, ref_block, False)
         elif pg_table[ref_block][2] and not pg_table[ref_block][3]:
+            print(pg_table[ref_block])
             hir_stack.move_to_end(ref_block)
         find_LIR(lir_stack, pg_table)
     else:
@@ -97,6 +90,7 @@ for i in range(len(trace)):
         if free_mem == 0:
             set_residence(pg_table, list(hir_stack.keys())[0], False)
             hir_stack.popitem(last=False)
+            print(hir_stack)
             if pg_table[ref_block][3] and pg_table[ref_block][2]:
                 set_recency(pg_table, list(lir_stack.keys())[0], False)
                 set_hir_block(pg_table, list(lir_stack.keys())[0], True)
@@ -113,7 +107,7 @@ for i in range(len(trace)):
             set_hir_block(pg_table, ref_block, False)
             set_recency(pg_table, ref_block, True)
             lir_stack[ref_block] = pg_table[ref_block]
-        elif len(lir_stack) > free_mem - HIR_SIZE:
+        elif len(lir_stack) >= MAX_MEMORY - HIR_SIZE:
             set_recency(pg_table, list(lir_stack.keys())[0], False)
             set_hir_block(pg_table, list(lir_stack.keys())[0], True)
             hir_stack[list(lir_stack.keys())[0]] = pg_table[list(lir_stack.keys())[0]]
