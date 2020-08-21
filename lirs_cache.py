@@ -32,13 +32,13 @@ def get_range(trace) -> int:
 
 #Read File In
 trace = []
-with codecs.open("/Users/polskafly/Desktop/REU/LIRS/traces/multi1.trc", "r", "UTF8") as inputFile:
+with codecs.open("/Users/polskafly/Desktop/REU/LIRS/traces/sprite.trc", "r", "UTF8") as inputFile:
     inputFile = inputFile.readlines()
 for line in inputFile:
     trace.append(int(line))
 
 #Initialization Parameters
-MAX_MEMORY = 100
+MAX_MEMORY = 1000
 HIR_PERCENTAGE = 1.0
 MIN_HIR_MEMORY = 2
 
@@ -71,18 +71,22 @@ for i in range(len(trace)):
         if not pg_table[ref_block][2] and pg_table[ref_block][3]:
             lir_stack.move_to_end(ref_block)
         elif pg_table[ref_block][2] and pg_table[ref_block][3]:
+            lir_stack.move_to_end(ref_block)
+            set_hir_block(pg_table, ref_block, False)
+            lir_stack[ref_block] = pg_table[ref_block]
+            if ref_block in hir_stack:
+                hir_stack.move_to_end(ref_block)
+                hir_stack.popitem(last=True)
             #Check if HIR is full before popping if I don't get same results as prof.
-            temp = hir_stack.popitem(last=False)
-            print(i, " ", temp)
+            if len(hir_stack) == HIR_SIZE:
+                temp = hir_stack.popitem(last=False)
+                print(i, " ", temp)
             set_recency(pg_table, list(lir_stack.keys())[0], False)
             set_hir_block(pg_table, list(lir_stack.keys())[0], True)
             hir_stack[list(lir_stack.keys())[0]] = pg_table[list(lir_stack.keys())[0]]
             lir_stack.move_to_end(list(lir_stack.keys())[0])
             lir_stack.popitem(last=True)
 
-            lir_stack.move_to_end(ref_block)
-            set_hir_block(pg_table, ref_block, False)
-            lir_stack[ref_block] = pg_table[ref_block]
         elif pg_table[ref_block][2] and not pg_table[ref_block][3]:
             hir_stack.move_to_end(ref_block)
             hir_stack[ref_block] = pg_table[ref_block]
