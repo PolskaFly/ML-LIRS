@@ -54,10 +54,9 @@ PG_HITS = 0
 PG_FAULTS = 0
 free_mem = MAX_MEMORY
 lir_size = 0
-
+test = 0
 for i in range(len(trace)):
     ref_block = trace[i]
-
     if not pg_table[ref_block][1]:
         PG_FAULTS += 1
         if free_mem == 0:
@@ -75,6 +74,10 @@ for i in range(len(trace)):
             del hir_stack[ref_block]
         except KeyError:
             pass
+
+    if pg_table[ref_block][1]:
+        PG_HITS += 1
+
     try:
         del lir_stack[ref_block]
     except KeyError:
@@ -85,26 +88,25 @@ for i in range(len(trace)):
 
     if pg_table[ref_block][2] and pg_table[ref_block][3]:
         pg_table[ref_block][2] = False
-        lir_stack[ref_block] = pg_table[ref_block][0]
         lir_size += 1
         if lir_size > MAX_MEMORY - HIR_SIZE:
             temp_block = list(lir_stack.keys())[0]
             pg_table[temp_block][2] = True
             pg_table[temp_block][3] = False
-            hir_stack[temp_block] = pg_table[temp_block][0]
-            lir_stack[temp_block] = pg_table[temp_block][0]
+            hir_stack[temp_block] = lir_stack[temp_block]
             find_lru(lir_stack, pg_table)
             lir_size -= 1
     elif pg_table[ref_block][2]:
         hir_stack[ref_block] = pg_table[ref_block][0]
+        hir_stack.move_to_end(ref_block)
 
     pg_table[ref_block][3] = True
 
 
 
-print(PG_HITS)
-print(PG_FAULTS)
-print(PG_FAULTS + PG_HITS)
+print("Hits: ", PG_HITS)
+print("Faults: ", PG_FAULTS)
+print("Hit Ratio: ", PG_HITS/(PG_HITS + PG_FAULTS) * 100)
 
 f = open("evictions.txt", "w")
 for i in range(len(eviction_list)):
