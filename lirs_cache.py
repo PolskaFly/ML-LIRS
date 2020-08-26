@@ -2,16 +2,10 @@ from collections import deque
 from collections import OrderedDict
 import codecs
 
-def find_lru(s: OrderedDict, q: OrderedDict, pg_tbl: deque):
+def find_lru(s: OrderedDict, pg_tbl: deque):
     temp_s = list(s.keys())
-    while s[temp_s[0]][2]:
+    while pg_tbl[temp_s[0]][2]:
         pg_tbl[temp_s[0]][3] = False
-        try:
-            if q[temp_s[0]]:
-                q[temp_s[0]] = pg_tbl[temp_s[0]]
-        except KeyError:
-            pass
-
         s.popitem(last=False)
         del temp_s[0]
 
@@ -69,12 +63,8 @@ for i in range(len(trace)):
         if free_mem == 0:
             temp_hir = list(hir_stack)
             pg_table[temp_hir[0]][1] = False
-            eviction_list.append(hir_stack[temp_hir[0]][0])
+            eviction_list.append(hir_stack[temp_hir[0]])
             hir_stack.popitem(last=False)
-            try:
-                lir_stack[temp_hir[0]] = pg_table[temp_hir[0]]
-            except KeyError:
-                pass
             free_mem += 1
         elif free_mem > HIR_SIZE:
             pg_table[ref_block][2] = False
@@ -85,33 +75,30 @@ for i in range(len(trace)):
             del hir_stack[ref_block]
         except KeyError:
             pass
-
     try:
         del lir_stack[ref_block]
     except KeyError:
         pass
 
     pg_table[ref_block][1] = True
-    lir_stack[ref_block] = pg_table[ref_block]
+    lir_stack[ref_block] = pg_table[ref_block][0]
 
     if pg_table[ref_block][2] and pg_table[ref_block][3]:
         pg_table[ref_block][2] = False
-        lir_stack[ref_block] = pg_table[ref_block]
+        lir_stack[ref_block] = pg_table[ref_block][0]
         lir_size += 1
-#bug happens here
         if lir_size > MAX_MEMORY - HIR_SIZE:
             temp_block = list(lir_stack.keys())[0]
             pg_table[temp_block][2] = True
             pg_table[temp_block][3] = False
-            hir_stack[temp_block] = pg_table[temp_block]
-            lir_stack[temp_block] = pg_table[temp_block]
-            find_lru(lir_stack, hir_stack, pg_table)
+            hir_stack[temp_block] = pg_table[temp_block][0]
+            lir_stack[temp_block] = pg_table[temp_block][0]
+            find_lru(lir_stack, pg_table)
             lir_size -= 1
     elif pg_table[ref_block][2]:
-        hir_stack[ref_block] = pg_table[ref_block]
+        hir_stack[ref_block] = pg_table[ref_block][0]
 
     pg_table[ref_block][3] = True
-    lir_stack[ref_block] = pg_table[ref_block]
 
 
 
