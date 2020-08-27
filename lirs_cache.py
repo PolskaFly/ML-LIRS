@@ -15,20 +15,19 @@ def get_range(trace) -> int:
     for x in trace:
         if x > max:
             max = x
-
     return max
 
 
 # Read File In
 trace = []
-with codecs.open("/Users/polskafly/Desktop/REU/LIRS/traces/2_pools.trc", "r", "UTF8") as inputFile:
+with codecs.open("/Users/polskafly/Desktop/REU/LIRS/traces/sprite.trc", "r", "UTF8") as inputFile:
     inputFile = inputFile.readlines()
 for line in inputFile:
     if not line == "*\n":
         trace.append(int(line))
 
 # Init Parameters
-MAX_MEMORY = 1500
+MAX_MEMORY = 500
 HIR_PERCENTAGE = 1.0
 MIN_HIR_MEMORY = 2
 
@@ -60,7 +59,7 @@ for i in range(len(trace)):
         if free_mem == 0:
             temp_hir = list(hir_stack)
             pg_table[temp_hir[0]][1] = False
-            eviction_list.append(hir_stack[temp_hir[0]])
+            eviction_list.append(temp_hir[0])
             hir_stack.popitem(last=False)
             free_mem += 1
         elif free_mem > HIR_SIZE:
@@ -76,13 +75,15 @@ for i in range(len(trace)):
     if pg_table[ref_block][1]:
         PG_HITS += 1
 
-    try:
+
+    if ref_block in lir_stack:
+        temp_lir = list(lir_stack)[0]
         del lir_stack[ref_block]
-    except KeyError:
-        pass
+        find_lru(lir_stack, pg_table)
 
     pg_table[ref_block][1] = True
     lir_stack[ref_block] = pg_table[ref_block][0]
+
 
     if pg_table[ref_block][2] and pg_table[ref_block][3]:
         pg_table[ref_block][2] = False
@@ -104,6 +105,7 @@ for i in range(len(trace)):
 
 print("Hits: ", PG_HITS)
 print("Faults: ", PG_FAULTS)
+print("Total: ", PG_FAULTS + PG_HITS)
 print("HIR Size: ", HIR_SIZE)
 print("Hit Ratio: ", PG_HITS/(PG_HITS + PG_FAULTS) * 100)
 
