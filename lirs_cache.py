@@ -3,21 +3,18 @@ from collections import OrderedDict
 import codecs
 
 def find_lru(s: OrderedDict, pg_tbl: deque):
-    temp_s = list(s.keys())
+    temp_s = list(s)
     while pg_tbl[temp_s[0]][2]:
         pg_tbl[temp_s[0]][3] = False
         s.popitem(last=False)
         del temp_s[0]
 
 def get_range(trace) -> int:
-    min = 0
     max = 0
 
     for x in trace:
         if x > max:
             max = x
-        if x <= min:
-            min = x
 
     return max
 
@@ -31,7 +28,7 @@ for line in inputFile:
         trace.append(int(line))
 
 # Init Parameters
-MAX_MEMORY = 400
+MAX_MEMORY = 1500
 HIR_PERCENTAGE = 1.0
 MIN_HIR_MEMORY = 2
 
@@ -54,9 +51,10 @@ PG_HITS = 0
 PG_FAULTS = 0
 free_mem = MAX_MEMORY
 lir_size = 0
-test = 0
+
 for i in range(len(trace)):
     ref_block = trace[i]
+
     if not pg_table[ref_block][1]:
         PG_FAULTS += 1
         if free_mem == 0:
@@ -90,7 +88,7 @@ for i in range(len(trace)):
         pg_table[ref_block][2] = False
         lir_size += 1
         if lir_size > MAX_MEMORY - HIR_SIZE:
-            temp_block = list(lir_stack.keys())[0]
+            temp_block = list(lir_stack)[0]
             pg_table[temp_block][2] = True
             pg_table[temp_block][3] = False
             hir_stack[temp_block] = lir_stack[temp_block]
@@ -98,14 +96,15 @@ for i in range(len(trace)):
             lir_size -= 1
     elif pg_table[ref_block][2]:
         hir_stack[ref_block] = pg_table[ref_block][0]
-        hir_stack.move_to_end(ref_block)
 
     pg_table[ref_block][3] = True
 
 
 
+
 print("Hits: ", PG_HITS)
 print("Faults: ", PG_FAULTS)
+print("HIR Size: ", HIR_SIZE)
 print("Hit Ratio: ", PG_HITS/(PG_HITS + PG_FAULTS) * 100)
 
 f = open("evictions.txt", "w")
