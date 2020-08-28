@@ -27,7 +27,7 @@ for line in inputFile:
         trace.append(int(line))
 
 # Init Parameters
-MAX_MEMORY = 100
+MAX_MEMORY = 500
 HIR_PERCENTAGE = 1.0
 MIN_HIR_MEMORY = 2
 
@@ -75,16 +75,14 @@ for i in range(len(trace)):
             lir_size += 1
         free_mem -= 1
     elif pg_table[ref_block][2]:
-        try:
+        if hir_stack.get(ref_block):
             del hir_stack[ref_block]
-        except KeyError:
-            pass
 
     if pg_table[ref_block][1]:
         PG_HITS += 1
 
 
-    if ref_block in lir_stack:
+    if lir_stack.get(ref_block):
         temp_lir = list(lir_stack)[0]
         del lir_stack[ref_block]
         find_lru(lir_stack, pg_table)
