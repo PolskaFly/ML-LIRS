@@ -27,7 +27,7 @@ for line in inputFile:
         trace.append(int(line))
 
 # Init Parameters
-MAX_MEMORY = 500
+MAX_MEMORY = 100
 HIR_PERCENTAGE = 1.0
 MIN_HIR_MEMORY = 2
 
@@ -50,10 +50,18 @@ PG_HITS = 0
 PG_FAULTS = 0
 free_mem = MAX_MEMORY
 lir_size = 0
-
+in_trace = 0
+last_ref_block = -1
 for i in range(len(trace)):
     ref_block = trace[i]
+    #Ask why he makes a duplicate a special case almost...
+    if ref_block == last_ref_block:
+        PG_HITS += 1
+        continue
+    else:
+        pass
 
+    in_trace += 1
     if not pg_table[ref_block][1]:
         PG_FAULTS += 1
         if free_mem == 0:
@@ -99,6 +107,8 @@ for i in range(len(trace)):
         hir_stack[ref_block] = pg_table[ref_block][0]
 
     pg_table[ref_block][3] = True
+
+    last_ref_block = ref_block
 
 
 
