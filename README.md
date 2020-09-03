@@ -1,11 +1,8 @@
 # machine-learned-cache
 
-Issues:
+Researching ways on improving current cache replacement algorithms by using machine learning techniques.
 
--Not all cached blocks have features and therefore cannot be evicted.
+Current focus is on improving the LIRS algorithms ability to determine placement into either the S or Q stack.
 
--Need to make changes to labeling.
-
--Belady boundary needs work.
 
 
