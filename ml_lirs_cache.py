@@ -29,6 +29,13 @@ def get_range(trace) -> int:
             max = x
     return max
 
+def print_information(hits, faults, size):
+    print("Hits: ", hits)
+    print("Faults: ", faults)
+    print("Total: ", hits + faults)
+    print("HIR Size: ", size)
+    print("Hit Ratio: ", hits / (hits + faults) * 100)
+
 def train_model(features, labels, size, rate):
     # Model Training
     temp_features = torch.from_numpy(np.array(features)).type(torch.FloatTensor)
@@ -63,7 +70,12 @@ def train_model(features, labels, size, rate):
     print(loss)
     return model
 
-def LIRS(pg_hits, pg_faults, free_mem, lir_size, lir_stack, hir_stack, pg_table):
+def LIRS(trace):
+    # Creating variables
+    pg_hits = 0
+    pg_faults = 0
+    free_mem = MAX_MEMORY
+    lir_size = 0
     last_ref_block = -1
     is_data = False
     trained = False
@@ -127,47 +139,42 @@ def LIRS(pg_hits, pg_faults, free_mem, lir_size, lir_stack, hir_stack, pg_table)
         pg_table[ref_block][1] = True
         lir_stack[ref_block] = pg_table[ref_block][0]
 
-        if not trained:
-            if pg_table[ref_block][2] and pg_table[ref_block][3]:
-                pg_table[ref_block][2] = False
-                lir_size += 1
-                if lir_size > MAX_MEMORY - HIR_SIZE:
-                    temp_block = list(lir_stack)[0]
-                    pg_table[temp_block][2] = True
-                    pg_table[temp_block][3] = False
-                    hir_stack[temp_block] = lir_stack[temp_block]
-                    find_lru(lir_stack, pg_table)
-                    lir_size -= 1
-            elif pg_table[ref_block][2]:
-                hir_stack[ref_block] = pg_table[ref_block][0]
-        else:
-            #logic here not working. HIR is not maintained for some reason. Also prediction goes above 1..
+        #Work Here
+        if trained:
             prediction = m(torch.tensor([pg_table[ref_block][4]]).type(torch.FloatTensor))
             if prediction > .5:
                 pg_table[ref_block][2] = False
-                lir_size += 1
-                if lir_size > MAX_MEMORY - HIR_SIZE:
-                    temp_block = list(lir_stack)[0]
-                    pg_table[temp_block][2] = True
-                    pg_table[temp_block][3] = False
-                    hir_stack[temp_block] = lir_stack[temp_block]
-                    find_lru(lir_stack, pg_table)
-                    lir_size -= 1
             else:
-                hir_stack[ref_block] = pg_table[ref_block][0]
+                pg_table[ref_block][2] = True
+
+        if pg_table[ref_block][2] and pg_table[ref_block][3]:
+            pg_table[ref_block][2] = False
+            lir_size += 1
+            if lir_size > MAX_MEMORY - HIR_SIZE:
+                temp_block = list(lir_stack)[0]
+                pg_table[temp_block][2] = True
+                pg_table[temp_block][3] = False
+                hir_stack[temp_block] = lir_stack[temp_block]
+                find_lru(lir_stack, pg_table)
+                lir_size -= 1
+        elif pg_table[ref_block][2]:
+            hir_stack[ref_block] = pg_table[ref_block][0]
+
 
         pg_table[ref_block][3] = True
 
         last_ref_block = ref_block
 
+    print_information(pg_hits, pg_faults, HIR_SIZE)
+
 
 # Read File In
-trace = []
+trace_array = []
 with codecs.open("/Users/polskafly/Desktop/REU/LIRS/traces/2_pools.trc", "r", "UTF8") as inputFile:
     inputFile = inputFile.readlines()
 for line in inputFile:
     if not line == "*\n":
-        trace.append(int(line))
+        trace_array.append(int(line))
 
 # Init Parameters
 MAX_MEMORY = 100
@@ -186,35 +193,19 @@ if DATA_COLLECTION_START < TRAINING_DATA_MIN:
 # Init End
 
 #Creating stacks and lists
-lir_stck = OrderedDict()
-hir_stck = OrderedDict()
-pg_tbl = deque()
+lir_stack = OrderedDict()
+hir_stack = OrderedDict()
+pg_table = deque()
 eviction_list = []
 training_data = deque()
 label_data = deque()
 
 # [Block Number, is_resident, is_hir_block, in_stack, reuse distance]
-vm_size = get_range(trace)
+vm_size = get_range(trace_array)
 for x in range(vm_size + 1):
-    pg_tbl.append([x, False, True, False, 9999])
+    pg_table.append([x, False, True, False, 9999])
 
-#Creating variables
-PG_HITS = 0
-PG_FAULTS = 0
-free_mem = MAX_MEMORY
-lir_size = 0
-in_trace = 0
-is_trained = False
-
-
-LIRS(PG_HITS, PG_FAULTS, free_mem, lir_size, lir_stck, hir_stck, pg_tbl)
-
-
-print("Hits: ", PG_HITS)
-print("Faults: ", PG_FAULTS)
-print("Total: ", PG_FAULTS + PG_HITS)
-print("HIR Size: ", HIR_SIZE)
-print("Hit Ratio: ", PG_HITS/(PG_HITS + PG_FAULTS) * 100)
+LIRS(trace_array)
 
 f = open("evictions.txt", "w")
 for i in range(len(eviction_list)):
