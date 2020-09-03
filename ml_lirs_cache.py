@@ -24,7 +24,6 @@ def find_lru(s: OrderedDict, pg_tbl: deque):
 
 def get_range(trace) -> int:
     max = 0
-
     for x in trace:
         if x > max:
             max = x
@@ -32,10 +31,10 @@ def get_range(trace) -> int:
 
 def train_model(features, labels, size, rate):
     # Model Training
-    features = torch.from_numpy(np.array(features)).type(torch.FloatTensor)
-    labels = torch.from_numpy(np.array(labels)).type(torch.FloatTensor)
+    temp_features = torch.from_numpy(np.array(features)).type(torch.FloatTensor)
+    temp_labels = torch.from_numpy(np.array(labels)).type(torch.FloatTensor)
 
-    train_ds = TensorDataset(features, labels)
+    train_ds = TensorDataset(temp_features, temp_labels)
 
     batch_size = size
     train_dl = DataLoader(train_ds, batch_size, shuffle=True)
@@ -45,49 +44,37 @@ def train_model(features, labels, size, rate):
     criterion = nn.BCEWithLogitsLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=rate)
 
-    # m = nn.Sigmoid()
-    # training_features = m(training_features)
-
-    for epoch in range(len(features)):
+    for epoch in range(100):
         for i in enumerate(train_dl):
             # Clear gradients w.r.t. parameters
             optimizer.zero_grad()
 
             # Forward pass to get output/logits
-            outputs = model(features)
+            outputs = model(temp_features)
 
             # Calculate Loss: softmax --> cross entropy loss
-            loss = criterion(outputs, labels)
+            loss = criterion(outputs, temp_labels)
 
             # Getting gradients w.r.t. parameters
             loss.backward()
 
             # Updating parameters
             optimizer.step()
+    print(loss)
     return model
 
-
-def LIRS(pg_hits, pg_faults, free_mem, lir_size, trained):
-    training_flt_cntr = 0
-    training_hit_cntr = 0
+def LIRS(pg_hits, pg_faults, free_mem, lir_size, lir_stack, hir_stack, pg_table):
     last_ref_block = -1
-    non_zero = False
-    inf_count = 0
+    is_data = False
+    trained = False
+
     for i in range(len(trace)):
-        if non_zero:
-            if training_hit_cntr + training_flt_cntr > TRAINING_DATA_MIN and not trained:
-                m = train_model(training_data, label_data, 30, .01)
-                training_data.clear()
-                label_data.clear()
-                training_flt_cntr = 0
-                training_hit_cntr = 0
-                trained = True
-            elif training_hit_cntr + training_flt_cntr > 30 and trained:
-                m = train_model(training_data, label_data, 10, .1)
-                training_data.clear()
-                label_data.clear()
-                training_flt_cntr = 0
-                training_hit_cntr = 0
+        if is_data:
+            m = train_model(training_data, label_data, 30, .01)
+            training_data.clear()
+            label_data.clear()
+            trained = True
+            is_data = False
 
         ref_block = trace[i]
 
@@ -102,21 +89,6 @@ def LIRS(pg_hits, pg_faults, free_mem, lir_size, trained):
             if free_mem == 0:
                 temp_hir = list(hir_stack)
                 pg_table[temp_hir[0]][1] = False
-
-                # Gathering and labeling training data (always happening)
-                if i > DATA_COLLECTION_START:
-                    if pg_table[temp_hir[0]][4] == 9999 and inf_count < 50:
-                        training_data.append([pg_table[temp_hir[0]][4]])
-                        label_data.append([0])
-                        training_flt_cntr += 1
-                        non_zero = True
-                        inf_count += 1
-                    elif pg_table[temp_hir[0]][4] != 9999 and inf_count >= 50:
-                        training_data.append([pg_table[temp_hir[0]][4]])
-                        label_data.append([0])
-                        training_flt_cntr += 1
-                        non_zero = True
-
                 eviction_list.append(temp_hir[0])
                 hir_stack.popitem(last=False)
                 free_mem += 1
@@ -130,29 +102,25 @@ def LIRS(pg_hits, pg_faults, free_mem, lir_size, trained):
 
         if pg_table[ref_block][1]:
             pg_hits += 1
-            if i > DATA_COLLECTION_START:
-                if pg_table[temp_hir[0]][4] == 9999 and inf_count < 50:
-                    training_data.append([pg_table[ref_block][4]])
+
+        #Data gathering. If in LIR stack and non HIR, label = non evictable
+        #Else: evictable
+        if len(lir_stack) == DATA_COLLECTION_START and not trained:
+            for key in lir_stack.keys():
+                training_data.append([pg_table[key][4]])
+                if pg_table[key][1] and not pg_table[key][2]:
                     label_data.append([1])
-                    training_hit_cntr += 1
-                    non_zero = True
-                    inf_count += 1
-                elif pg_table[temp_hir[0]][4] != 9999 and inf_count >= 50:
-                    training_data.append([pg_table[ref_block][4]])
-                    label_data.append([1])
-                    training_hit_cntr += 1
-                    non_zero = True
+                else:
+                    label_data.append([0])
+            is_data = True
 
         if lir_stack.get(ref_block):
-            temp_lir = list(lir_stack)
-            trigger = False
             counter = 0
-            for x in range(len(temp_lir)):
-                if temp_lir[x] == ref_block:
-                    trigger = True
-                if trigger:
-                    counter += 1
-            pg_table[ref_block][4] = counter
+            for j in lir_stack.keys():  # Reuse distance
+                counter += 1
+                if lir_stack[j] == ref_block:
+                    break
+            pg_table[ref_block][4] = (len(lir_stack) - counter)
             del lir_stack[ref_block]
             find_lru(lir_stack, pg_table)
 
@@ -173,8 +141,9 @@ def LIRS(pg_hits, pg_faults, free_mem, lir_size, trained):
             elif pg_table[ref_block][2]:
                 hir_stack[ref_block] = pg_table[ref_block][0]
         else:
-            #BIG LOGIC ERROR HERE.
-            if m(torch.tensor([pg_table[ref_block][4]]).type(torch.FloatTensor)) > .5 and pg_table[ref_block][3]:
+            #logic here not working. HIR is not maintained for some reason. Also prediction goes above 1..
+            prediction = m(torch.tensor([pg_table[ref_block][4]]).type(torch.FloatTensor))
+            if prediction > .5:
                 pg_table[ref_block][2] = False
                 lir_size += 1
                 if lir_size > MAX_MEMORY - HIR_SIZE:
@@ -190,6 +159,7 @@ def LIRS(pg_hits, pg_faults, free_mem, lir_size, trained):
         pg_table[ref_block][3] = True
 
         last_ref_block = ref_block
+
 
 # Read File In
 trace = []
@@ -210,13 +180,15 @@ if HIR_SIZE < MIN_HIR_MEMORY:
 
 TRAINING_HIT_PERCENTAGE = 30.0
 TRAINING_DATA_MIN = 500
-DATA_COLLECTION_START = MAX_MEMORY * 10
+DATA_COLLECTION_START = MAX_MEMORY * 2
+if DATA_COLLECTION_START < TRAINING_DATA_MIN:
+    DATA_COLLECTION_START = TRAINING_DATA_MIN
 # Init End
 
 #Creating stacks and lists
-lir_stack = OrderedDict()
-hir_stack = OrderedDict()
-pg_table = deque()
+lir_stck = OrderedDict()
+hir_stck = OrderedDict()
+pg_tbl = deque()
 eviction_list = []
 training_data = deque()
 label_data = deque()
@@ -224,7 +196,7 @@ label_data = deque()
 # [Block Number, is_resident, is_hir_block, in_stack, reuse distance]
 vm_size = get_range(trace)
 for x in range(vm_size + 1):
-    pg_table.append([x, False, True, False, 9999])
+    pg_tbl.append([x, False, True, False, 9999])
 
 #Creating variables
 PG_HITS = 0
@@ -234,7 +206,8 @@ lir_size = 0
 in_trace = 0
 is_trained = False
 
-LIRS(PG_HITS, PG_FAULTS, free_mem, lir_size, is_trained)
+
+LIRS(PG_HITS, PG_FAULTS, free_mem, lir_size, lir_stck, hir_stck, pg_tbl)
 
 
 print("Hits: ", PG_HITS)
