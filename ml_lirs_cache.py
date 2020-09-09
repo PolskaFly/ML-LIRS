@@ -106,19 +106,17 @@ def LIRS(trace):
     free_mem = MAX_MEMORY
     lir_size = 0
     last_ref_block = -1
-    is_data = False
     trained = False
 
     for i in range(len(trace)):
-        if is_data:
-            m = init_model(training_data, label_data, 30, .01, int(MAX_MEMORY/2))
+        if not trained and len(training_data) > ONLINE_TRAINING_SIZE:
+            m = init_model(training_data, label_data, 15, .001, int(ONLINE_EPOCH))
             training_data.clear()
             label_data.clear()
             trained = True
-            is_data = False
 
-        if len(training_data) > ONLINE_TRAINING_SIZE:
-            m = online_training(m, training_data, label_data, 20, .01, int(ONLINE_EPOCH))
+        if len(training_data) > ONLINE_TRAINING_SIZE and trained:
+            m = online_training(m, training_data, label_data, 15, .0001, int(ONLINE_EPOCH))
             training_data.clear()
             label_data.clear()
 
@@ -135,32 +133,19 @@ def LIRS(trace):
             if free_mem == 0:
                 temp_hir = list(hir_stack)
                 pg_table[temp_hir[0]][1] = False
-                if trained:
-                    training_data.append([pg_table[key][4]])
-                    label_data.append([0])
-                eviction_list.append(temp_hir[0])
-                evicted_stack[temp_hir[0]] = temp_hir[0]
                 hir_stack.popitem(last=False)
                 free_mem += 1
             elif free_mem > HIR_SIZE:
                 pg_table[ref_block][2] = False
                 lir_size += 1
             free_mem -= 1
+
         elif pg_table[ref_block][2]:
             if hir_stack.get(ref_block):
                 del hir_stack[ref_block]
 
         if pg_table[ref_block][1]:
             pg_hits += 1
-
-        if len(lir_stack) == DATA_COLLECTION_START and not trained:
-            for key in lir_stack.keys():
-                training_data.append([pg_table[key][4]])
-                if pg_table[key][1] and not pg_table[key][2]:
-                    label_data.append([1])
-                else:
-                    label_data.append([0])
-            is_data = True
 
         if lir_stack.get(ref_block):
             counter = 0
@@ -169,15 +154,11 @@ def LIRS(trace):
                 if lir_stack[j] == ref_block:
                     break
             pg_table[ref_block][4] = (len(lir_stack) - counter)
-            if trained:
-                training_data.append([pg_table[key][4]])
-                label_data.append([1])
             del lir_stack[ref_block]
             find_lru(lir_stack, pg_table)
 
         pg_table[ref_block][1] = True
         lir_stack[ref_block] = pg_table[ref_block][0]
-
 
         if pg_table[ref_block][2] and pg_table[ref_block][3]:
             pg_table[ref_block][2] = False
@@ -191,7 +172,7 @@ def LIRS(trace):
                 find_lru(lir_stack, pg_table)
                 lir_size -= 1
         elif pg_table[ref_block][2]:
-            if not trained:
+            if not trained or pg_table[ref_block][4] == 9999:
                 hir_stack[ref_block] = pg_table[ref_block][0]
             else:
                 prediction = m(torch.tensor([pg_table[ref_block][4]]).type(torch.FloatTensor))
@@ -213,30 +194,32 @@ def LIRS(trace):
 
         last_ref_block = ref_block
 
+        if pg_table[ref_block][4] != 9999:
+            training_data.append([pg_table[ref_block][4]])
+            if pg_table[ref_block][1] and not pg_table[ref_block][2]:
+                label_data.append([1])
+            else:
+                label_data.append([0])
+
     print_information(pg_hits, pg_faults, HIR_SIZE)
 
 
 # Read File In
 trace_array = []
-with codecs.open("/Users/polskafly/Desktop/REU/LIRS/traces/2_pools.trc", "r", "UTF8") as inputFile:
+with codecs.open("/Users/polskafly/Desktop/REU/LIRS/traces/multi1.trc", "r", "UTF8") as inputFile:
     inputFile = inputFile.readlines()
 for line in inputFile:
     if not line == "*\n":
         trace_array.append(int(line))
 
 # Init Parameters
-MAX_MEMORY = 450
+MAX_MEMORY = 800
 HIR_PERCENTAGE = 1.0
 MIN_HIR_MEMORY = 2
 
 HIR_SIZE = MAX_MEMORY * (HIR_PERCENTAGE / 100)
 if HIR_SIZE < MIN_HIR_MEMORY:
     HIR_SIZE = MIN_HIR_MEMORY
-
-TRAINING_DATA_MIN = 250
-DATA_COLLECTION_START = MAX_MEMORY * 2
-if DATA_COLLECTION_START < TRAINING_DATA_MIN:
-    DATA_COLLECTION_START = TRAINING_DATA_MIN
 
 ONLINE_TRAINING_PERCENTAGE = 1.0
 MIN_ONLINE_TRAINING = 15
@@ -245,14 +228,13 @@ if ONLINE_EPOCH < MIN_ONLINE_TRAINING:
     ONLINE_EPOCH = MIN_ONLINE_TRAINING
 
 ONLINE_TRAINING_SIZE = MAX_MEMORY/2
-if ONLINE_TRAINING_SIZE < 400:
-    ONLINE_TRAINING_SIZE = 400
+if ONLINE_TRAINING_SIZE < 200:
+    ONLINE_TRAINING_SIZE = 200
 # Init End
 
 #Creating stacks and lists
 lir_stack = OrderedDict()
 hir_stack = OrderedDict()
-evicted_stack = OrderedDict()
 pg_table = deque()
 eviction_list = []
 training_data = deque()
