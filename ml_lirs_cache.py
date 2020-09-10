@@ -48,7 +48,7 @@ def init_model(features, labels, size, rate, amount):
     next(iter(train_dl))
 
     model = LogisticRegression(1, 1)
-    criterion = nn.BCEWithLogitsLoss()
+    criterion = nn.BCELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=rate)
 
     for epoch in range(amount):
@@ -58,6 +58,8 @@ def init_model(features, labels, size, rate, amount):
 
             # Forward pass to get output/logits
             outputs = model(temp_features)
+
+            outputs = torch.sigmoid(outputs)
 
             # Calculate Loss: softmax --> cross entropy loss
             loss = criterion(outputs, temp_labels)
@@ -76,10 +78,10 @@ def online_training(model, features, labels, size, rate, amount):
     train_ds = TensorDataset(temp_features, temp_labels)
 
     batch_size = size
-    train_dl = DataLoader(train_ds, batch_size, shuffle=False)
+    train_dl = DataLoader(train_ds, batch_size, shuffle=True)
     next(iter(train_dl))
 
-    criterion = nn.BCEWithLogitsLoss()
+    criterion = nn.BCELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=rate)
     for epoch in range(amount):
         for i in enumerate(train_dl):
@@ -88,6 +90,8 @@ def online_training(model, features, labels, size, rate, amount):
 
             # Forward pass to get output/logits
             outputs = model(temp_features)
+
+            outputs = torch.sigmoid(outputs)
 
             # Calculate Loss: softmax --> cross entropy loss
             loss = criterion(outputs, temp_labels)
@@ -99,7 +103,7 @@ def online_training(model, features, labels, size, rate, amount):
             optimizer.step()
     return model
 
-def LIRS(trace):
+def LIRS(trace, pg_table):
     # Creating variables
     pg_hits = 0
     pg_faults = 0
@@ -107,23 +111,32 @@ def LIRS(trace):
     lir_size = 0
     last_ref_block = -1
     trained = False
+    test = 0
 
     for i in range(len(trace)):
-        if not trained and len(training_data) > ONLINE_TRAINING_SIZE:
-            m = init_model(training_data, label_data, 15, .001, int(ONLINE_EPOCH))
+        ref_block = trace[i]
+
+        if pg_table[ref_block][4] != 9999:
+            training_data.append([pg_table[ref_block][4]])
+            if pg_table[ref_block][1] and not pg_table[ref_block][2]:
+                label_data.append([1])
+            else:
+                label_data.append([0])
+
+        if not trained and len(training_data) > 1:
+            m = init_model(training_data, label_data, 1, .001, 1)
             training_data.clear()
             label_data.clear()
             trained = True
 
-        if len(training_data) > ONLINE_TRAINING_SIZE and trained:
-            m = online_training(m, training_data, label_data, 15, .0001, int(ONLINE_EPOCH))
+        if len(training_data) > 1 and trained:
+            m = online_training(m, training_data, label_data, 1, .001, 1)
             training_data.clear()
             label_data.clear()
 
-        ref_block = trace[i]
-
         if ref_block == last_ref_block:
             pg_hits += 1
+            pg_table[ref_block][4] = 0
             continue
         else:
             pass
@@ -175,8 +188,9 @@ def LIRS(trace):
             if not trained or pg_table[ref_block][4] == 9999:
                 hir_stack[ref_block] = pg_table[ref_block][0]
             else:
-                prediction = m(torch.tensor([pg_table[ref_block][4]]).type(torch.FloatTensor))
-                if prediction > 0:
+                test += 1
+                prediction = m(torch.sigmoid(torch.tensor([pg_table[ref_block][4]]).type(torch.FloatTensor)))
+                if prediction > .5:
                     pg_table[ref_block][2] = False
                     lir_size += 1
                     if lir_size > MAX_MEMORY - HIR_SIZE:
@@ -189,17 +203,11 @@ def LIRS(trace):
                 else:
                     hir_stack[ref_block] = pg_table[ref_block][0]
 
-
         pg_table[ref_block][3] = True
 
         last_ref_block = ref_block
+        print(test)
 
-        if pg_table[ref_block][4] != 9999:
-            training_data.append([pg_table[ref_block][4]])
-            if pg_table[ref_block][1] and not pg_table[ref_block][2]:
-                label_data.append([1])
-            else:
-                label_data.append([0])
 
     print_information(pg_hits, pg_faults, HIR_SIZE)
 
@@ -213,29 +221,19 @@ for line in inputFile:
         trace_array.append(int(line))
 
 # Init Parameters
-MAX_MEMORY = 800
+MAX_MEMORY = 2000
 HIR_PERCENTAGE = 1.0
 MIN_HIR_MEMORY = 2
 
 HIR_SIZE = MAX_MEMORY * (HIR_PERCENTAGE / 100)
 if HIR_SIZE < MIN_HIR_MEMORY:
     HIR_SIZE = MIN_HIR_MEMORY
-
-ONLINE_TRAINING_PERCENTAGE = 1.0
-MIN_ONLINE_TRAINING = 15
-ONLINE_EPOCH = MAX_MEMORY * (ONLINE_TRAINING_PERCENTAGE / 100)
-if ONLINE_EPOCH < MIN_ONLINE_TRAINING:
-    ONLINE_EPOCH = MIN_ONLINE_TRAINING
-
-ONLINE_TRAINING_SIZE = MAX_MEMORY/2
-if ONLINE_TRAINING_SIZE < 200:
-    ONLINE_TRAINING_SIZE = 200
 # Init End
 
 #Creating stacks and lists
 lir_stack = OrderedDict()
 hir_stack = OrderedDict()
-pg_table = deque()
+pg_tbl = deque()
 eviction_list = []
 training_data = deque()
 label_data = deque()
@@ -243,9 +241,9 @@ label_data = deque()
 # [Block Number, is_resident, is_hir_block, in_stack, reuse distance]
 vm_size = get_range(trace_array)
 for x in range(vm_size + 1):
-    pg_table.append([x, False, True, False, 9999])
+    pg_tbl.append([x, False, True, False, 9999])
 
-LIRS(trace_array)
+LIRS(trace_array, pg_tbl)
 
 f = open("evictions.txt", "w")
 for i in range(len(eviction_list)):
