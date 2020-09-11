@@ -122,6 +122,8 @@ vm_size = get_range(trace)
 for x in range(vm_size + 1):
     pg_tbl.append([x, False, True, False])
 
+LIRS(trace, pg_tbl)
+
 f = open("evictions.txt", "w")
 for i in range(len(eviction_list)):
     f.write(str(eviction_list[i]) + "\n")
