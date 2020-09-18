@@ -69,10 +69,10 @@ def online_training(model, features, labels, size, rate):
     return model
 
 def replace_lir_block(pg_table, lir_size):
-    temp_block = list(lir_stack)[0]
-    pg_table[temp_block][2] = True
-    pg_table[temp_block][3] = False
-    hir_stack[temp_block] = lir_stack[temp_block]
+    temp_block = lir_stack.popitem(last=False)
+    pg_table[temp_block[1]][2] = True
+    pg_table[temp_block[1]][3] = False
+    hir_stack[temp_block[1]] = temp_block[1]
     find_lru(lir_stack, pg_table)
     lir_size -= 1
     return lir_size
@@ -108,9 +108,8 @@ def LIRS(trace, pg_table):
         if not pg_table[ref_block][1]:
             pg_faults += 1
             if free_mem == 0:
-                temp_hir = list(hir_stack)
-                pg_table[temp_hir[0]][1] = False
-                hir_stack.popitem(last=False)
+                evicted_hir = hir_stack.popitem(last=False)
+                pg_table[evicted_hir[1]][1] = False
                 free_mem += 1
             elif free_mem > HIR_SIZE:
                 pg_table[ref_block][2] = False
@@ -180,7 +179,7 @@ for line in inputFile:
         trace_array.append(int(line))
 
 # Init Parameters
-MAX_MEMORY = 0
+MAX_MEMORY = 100
 HIR_PERCENTAGE = 1.0
 MIN_HIR_MEMORY = 2
 
