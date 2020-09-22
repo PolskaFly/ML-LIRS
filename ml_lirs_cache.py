@@ -5,6 +5,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import TensorDataset, DataLoader
 import numpy as np
+from statistics import median
 
 class LogisticRegression(torch.nn.Module):
     def __init__(self, input_dim, output_dim):
@@ -77,7 +78,7 @@ def replace_lir_block(pg_table, lir_size):
     lir_size -= 1
     return lir_size
 
-def LIRS(trace, pg_table):
+def LIRS(trace, pg_table, block_range_window):
     # Creating variables
     pg_hits = 0
     pg_faults = 0
@@ -87,13 +88,13 @@ def LIRS(trace, pg_table):
     trained = False
 
     #initializing model
-    model = LogisticRegression(1, 1)
+    model = LogisticRegression(3, 1)
 
     for i in range(len(trace)):
         ref_block = trace[i]
 
-        if len(training_data) > 1:
-            online_training(model, training_data, label_data, 1, .001)
+        if len(training_data) > 20:
+            online_training(model, training_data, label_data, 5, .001)
             training_data.clear()
             label_data.clear()
             trained = True
@@ -133,6 +134,11 @@ def LIRS(trace, pg_table):
             del lir_stack[ref_block]
             find_lru(lir_stack, pg_table)
 
+        if len(block_range_window) == BLOCK_RANGE:
+            pg_table[ref_block][5] = min(block_range_window)
+            pg_table[ref_block][6] = max(block_range_window)
+            pg_table[ref_block][7] = median(block_range_window)
+
         pg_table[ref_block][1] = True
         lir_stack[ref_block] = pg_table[ref_block][0]
 
@@ -147,7 +153,9 @@ def LIRS(trace, pg_table):
             if not trained or pg_table[ref_block][4] == 9999:
                 hir_stack[ref_block] = pg_table[ref_block][0]
             else:
-                prediction = model(torch.sigmoid(torch.tensor([pg_table[ref_block][4]]).type(torch.FloatTensor)))
+                prediction = model(torch.sigmoid(torch.tensor([pg_table[ref_block][5],
+                                                               pg_table[ref_block][6], pg_table[ref_block][6]])
+                                                 .type(torch.FloatTensor)))
                 if prediction > .5:
                     pg_table[ref_block][2] = False
                     lir_size += 1
@@ -158,10 +166,15 @@ def LIRS(trace, pg_table):
 
         pg_table[ref_block][3] = True
 
+        block_range_window.append(ref_block)
+        if len(block_range_window) > BLOCK_RANGE:
+            block_range_window.popleft()  # check if this does what I want
+
         last_ref_block = ref_block
 
         if pg_table[ref_block][4] != 9999:
-            training_data.append([pg_table[ref_block][4]])
+            training_data.append([pg_table[ref_block][5],
+                                  pg_table[ref_block][6], pg_table[ref_block][7]])
             if pg_table[ref_block][1] and not pg_table[ref_block][2]:
                 label_data.append([1])
             else:
@@ -172,16 +185,17 @@ def LIRS(trace, pg_table):
 
 # Read File In
 trace_array = []
-with codecs.open("/Users/polskafly/Desktop/REU/LIRS/traces/cpp.trc", "r", "UTF8") as inputFile:
+with codecs.open("/Users/polskafly/Desktop/REU/LIRS/traces/multi1.trc", "r", "UTF8") as inputFile:
     inputFile = inputFile.readlines()
 for line in inputFile:
     if not line == "*\n" or not line == "\n":
         trace_array.append(int(line))
 
 # Init Parameters
-MAX_MEMORY = 100
+MAX_MEMORY = 400
 HIR_PERCENTAGE = 1.0
 MIN_HIR_MEMORY = 2
+BLOCK_RANGE = 4
 
 HIR_SIZE = MAX_MEMORY * (HIR_PERCENTAGE / 100)
 if HIR_SIZE < MIN_HIR_MEMORY:
@@ -195,13 +209,15 @@ pg_tbl = deque()
 eviction_list = []
 training_data = deque()
 label_data = deque()
+block_range_window = deque()
 
-# [Block Number, is_resident, is_hir_block, in_stack, reuse distance]
+# [Block Number, is_resident, is_hir_block, in_stack, reuse distance, min block range, max block range, median]
 vm_size = get_range(trace_array)
 for x in range(vm_size + 1):
-    pg_tbl.append([x, False, True, False, 9999])
+    pg_tbl.append([x, False, True, False, 9999, 0, 0, 0])
 
-LIRS(trace_array, pg_tbl)
+
+LIRS(trace_array, pg_tbl, block_range_window)
 
 f = open("evictions.txt", "w")
 for i in range(len(eviction_list)):
