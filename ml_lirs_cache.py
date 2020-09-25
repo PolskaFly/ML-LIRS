@@ -6,6 +6,11 @@ import torch.nn as nn
 from torch.utils.data import TensorDataset, DataLoader
 import numpy as np
 from statistics import median
+from sklearn.ensemble import GradientBoostingClassifier
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.metrics import roc_curve, auc
+from sklearn.model_selection import train_test_split
+
 
 class LogisticRegression(torch.nn.Module):
     def __init__(self, input_dim, output_dim):
@@ -15,6 +20,7 @@ class LogisticRegression(torch.nn.Module):
     def forward(self, x):
         out = self.linear(x)
         return out
+
 
 def find_lru(s: OrderedDict, pg_table: deque):
     temp_s = list(s)
@@ -69,6 +75,9 @@ def online_training(model, features, labels, size, rate):
 
     return model
 
+def GBC(model, x_train, y_train, learning_rate):
+    model.fit(x_train, y_train)
+
 def replace_lir_block(pg_table, lir_size):
     temp_block = lir_stack.popitem(last=False)
     pg_table[temp_block[1]][2] = True
@@ -86,17 +95,27 @@ def LIRS(trace, pg_table, block_range_window):
     lir_size = 0
     last_ref_block = -1
     trained = False
+    training_data = deque()
+    label_data = deque()
+
 
     #initializing model
-    model = LogisticRegression(3, 1)
+    # model = LogisticRegression(4, 1)
+    model = GradientBoostingClassifier(n_estimators=20, learning_rate=.1, max_features=4, max_depth=2,
+                                        random_state=0)
 
     for i in range(len(trace)):
         ref_block = trace[i]
 
-        if len(training_data) > 20:
-            online_training(model, training_data, label_data, 5, .001)
-            training_data.clear()
-            label_data.clear()
+        if len(training_data) > 500:
+            # online_training(model, training_data, label_data, 25, .001)
+            scaler = MinMaxScaler()
+            training_data = scaler.fit_transform(training_data)
+            model.fit(training_data, label_data)
+            del training_data
+            del label_data
+            training_data = []
+            label_data = []
             trained = True
 
         if ref_block == last_ref_block:
@@ -111,6 +130,10 @@ def LIRS(trace, pg_table, block_range_window):
             if free_mem == 0:
                 evicted_hir = hir_stack.popitem(last=False)
                 pg_table[evicted_hir[1]][1] = False
+                if pg_table[ref_block][4] != 999999:
+                    training_data.append([pg_table[ref_block][4], pg_table[ref_block][5],
+                                          pg_table[ref_block][6], pg_table[ref_block][7]])
+                    label_data.append([0])
                 free_mem += 1
             elif free_mem > HIR_SIZE:
                 pg_table[ref_block][2] = False
@@ -131,6 +154,10 @@ def LIRS(trace, pg_table, block_range_window):
                 if lir_stack[j] == ref_block:
                     break
             pg_table[ref_block][4] = (len(lir_stack) - counter)
+            if pg_table[ref_block][4] != 999999:
+                training_data.append([pg_table[ref_block][5], pg_table[ref_block][5],
+                                      pg_table[ref_block][6], pg_table[ref_block][7]])
+                label_data.append([1])
             del lir_stack[ref_block]
             find_lru(lir_stack, pg_table)
 
@@ -138,6 +165,14 @@ def LIRS(trace, pg_table, block_range_window):
             pg_table[ref_block][5] = min(block_range_window)
             pg_table[ref_block][6] = max(block_range_window)
             pg_table[ref_block][7] = median(block_range_window)
+
+        # if pg_table[ref_block][4] != 9999:
+        #     training_data.append([pg_table[ref_block][5],
+        #                           pg_table[ref_block][6], pg_table[ref_block][7]])
+        #     if pg_table[ref_block][1] and not pg_table[ref_block][2]:
+        #         label_data.append([1])
+        #     else:
+        #         label_data.append([0])
 
         pg_table[ref_block][1] = True
         lir_stack[ref_block] = pg_table[ref_block][0]
@@ -150,12 +185,17 @@ def LIRS(trace, pg_table, block_range_window):
                 replace_lir_block(pg_table, lir_size)
 
         elif pg_table[ref_block][2]:
-            if not trained or pg_table[ref_block][4] == 9999:
+            if not trained or pg_table[ref_block][4] == 999999:
                 hir_stack[ref_block] = pg_table[ref_block][0]
             else:
-                prediction = model(torch.sigmoid(torch.tensor([pg_table[ref_block][5],
-                                                               pg_table[ref_block][6], pg_table[ref_block][6]])
-                                                 .type(torch.FloatTensor)))
+                # prediction = model(torch.sigmoid(torch.tensor([pg_table[ref_block][4], pg_table[ref_block][5],
+                #                                                pg_table[ref_block][6], pg_table[ref_block][7]])
+                #                                  .type(torch.FloatTensor)))
+
+                feature = np.array(pg_table[ref_block][4], pg_table[ref_block][5],
+                                    pg_table[ref_block][6], pg_table[ref_block][7])
+                prediction = model.predict(feature.reshape(-1, 1))
+                print(prediction)
                 if prediction > .5:
                     pg_table[ref_block][2] = False
                     lir_size += 1
@@ -172,30 +212,23 @@ def LIRS(trace, pg_table, block_range_window):
 
         last_ref_block = ref_block
 
-        if pg_table[ref_block][4] != 9999:
-            training_data.append([pg_table[ref_block][5],
-                                  pg_table[ref_block][6], pg_table[ref_block][7]])
-            if pg_table[ref_block][1] and not pg_table[ref_block][2]:
-                label_data.append([1])
-            else:
-                label_data.append([0])
 
     print_information(pg_hits, pg_faults, HIR_SIZE)
 
 
 # Read File In
 trace_array = []
-with codecs.open("/Users/polskafly/Desktop/REU/LIRS/traces/multi1.trc", "r", "UTF8") as inputFile:
+with codecs.open("/Users/polskafly/Desktop/REU/LIRS/traces/sprite.trc", "r", "UTF8") as inputFile:
     inputFile = inputFile.readlines()
 for line in inputFile:
     if not line == "*\n" or not line == "\n":
         trace_array.append(int(line))
 
 # Init Parameters
-MAX_MEMORY = 400
+MAX_MEMORY = 200
 HIR_PERCENTAGE = 1.0
 MIN_HIR_MEMORY = 2
-BLOCK_RANGE = 4
+BLOCK_RANGE = 10
 
 HIR_SIZE = MAX_MEMORY * (HIR_PERCENTAGE / 100)
 if HIR_SIZE < MIN_HIR_MEMORY:
@@ -207,8 +240,6 @@ lir_stack = OrderedDict()
 hir_stack = OrderedDict()
 pg_tbl = deque()
 eviction_list = []
-training_data = deque()
-label_data = deque()
 block_range_window = deque()
 
 # [Block Number, is_resident, is_hir_block, in_stack, reuse distance, min block range, max block range, median]
