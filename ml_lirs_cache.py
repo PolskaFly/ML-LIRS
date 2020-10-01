@@ -139,7 +139,7 @@ def LIRS(trace, pg_table, block_range_window):
         else:
             pass
 
-        if not pg_table[ref_block][1]:
+        if not pg_table[ref_block][1]:  # if block isn't a resident in the cache.
             pg_faults += 1
             if free_mem == 0:
                 evicted_hir = hir_stack.popitem(last=False)
