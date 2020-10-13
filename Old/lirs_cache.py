@@ -123,7 +123,7 @@ for x in range(vm_size + 1):
 
 LIRS(trace, pg_tbl)
 
-f = open("evictions.txt", "w")
+f = open("../evictions.txt", "w")
 for i in range(len(eviction_list)):
     f.write(str(eviction_list[i]) + "\n")
 f.close()
