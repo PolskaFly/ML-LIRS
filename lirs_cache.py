@@ -94,14 +94,14 @@ def LIRS(trace, pg_table):
 
 # Read File In
 trace = []
-with codecs.open("/Users/polskafly/Desktop/REU/LIRS/traces/sprite.trc", "r", "UTF8") as inputFile:
+with codecs.open("/Users/polskafly/Desktop/REU/LIRS/traces/ps.trc", "r", "UTF8") as inputFile:
     inputFile = inputFile.readlines()
 for line in inputFile:
     if not line == "*\n":
         trace.append(int(line))
 
 # Init Parameters
-MAX_MEMORY = 500
+MAX_MEMORY = 700
 HIR_PERCENTAGE = 1.0
 MIN_HIR_MEMORY = 2
 

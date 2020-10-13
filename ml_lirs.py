@@ -23,10 +23,8 @@ class LogisticRegression(torch.nn.Module):
         out = self.linear(x)
         return out
 
-
 class Block:
-    def __init__(self, Block_Number, is_resident, is_hir_block, in_stack, reuse_distance, min_b_range, max_b_range,
-                 median):
+    def __init__(self, Block_Number, is_resident, is_hir_block, in_stack, reuse_distance, min_b_range, max_b_range, median):
         self.b_num = Block_Number
         self.is_resident = is_resident
         self.is_hir = is_hir_block
@@ -39,7 +37,6 @@ class Block:
 
 HIR_PERCENTAGE = 1.0
 MIN_HIR_MEMORY = 2
-
 
 class LIRS:
     def __init__(self, trace, mem, result, info):
@@ -60,7 +57,7 @@ class LIRS:
             self.BLOCK_RANGE = 15
         # Init End
 
-        # Creating stacks and lists
+        #Creating stacks and lists
         self.lir_stack = OrderedDict()
         self.hir_stack = OrderedDict()
         self.eviction_list = []
@@ -78,6 +75,7 @@ class LIRS:
 
         self.result = result
         self.info = info
+
 
     def find_lru(self, s: OrderedDict, pg_table: deque):
         temp_s = list(s)
@@ -120,8 +118,7 @@ class LIRS:
         count_nonevict = 0
         count_evict = 0
 
-        model = GradientBoostingClassifier(n_estimators=30, learning_rate=.1, max_features=2, max_depth=15,
-                                           random_state=0)
+        model = GradientBoostingClassifier(n_estimators=30, learning_rate=.1, max_features=2, max_depth=15, random_state=0)
 
         for i in range(len(self.trace)):
             ref_block = self.trace[i]
@@ -136,7 +133,7 @@ class LIRS:
             if len(self.block_range_window) > self.BLOCK_RANGE:
                 self.block_range_window.popleft()
 
-            # training
+            #training
             if len(training_data) > train_amount:
                 # logReg_training(model, training_data, label_data, 1, .001)
                 model.fit(training_data, label_data)
@@ -147,7 +144,7 @@ class LIRS:
                 trained = True
                 count_nonevict = 0
                 count_evict = 0
-
+            
             # Beginning of standard LIRS logic
             if ref_block == last_ref_block:
                 self.pg_hits += 1
@@ -171,15 +168,14 @@ class LIRS:
                     self.pg_table[evicted_hir[1]].is_resident = False
 
                     # gathering training and label data of evicted objects
-                    if count_evict <= train_amount / 2:
-                        training_data.append(
-                            [self.pg_table[ref_block].reuse_distance, self.pg_table[ref_block].min_b_range,
-                             self.pg_table[ref_block].max_b_range, self.pg_table[ref_block].median])
+                    if count_evict <= train_amount/2:
+                        training_data.append([self.pg_table[ref_block].reuse_distance, self.pg_table[ref_block].min_b_range,
+                                            self.pg_table[ref_block].max_b_range, self.pg_table[ref_block].median])
                         label_data.append(-1)
                         count_evict += 1
 
                     self.free_mem += 1
-                elif self.free_mem > self.HIR_SIZE:  # Exception for when the cache is initially empty and is being filled.
+                elif self.free_mem > self.HIR_SIZE: # Exception for when the cache is initially empty and is being filled.
                     self.pg_table[ref_block].is_hir = False
                     self.lir_size += 1
                 self.free_mem -= 1
@@ -196,42 +192,39 @@ class LIRS:
                     counter += 1
                     if self.lir_stack[j] == ref_block:
                         break
-                self.pg_table[ref_block].reuse_distance = (
-                            len(self.lir_stack) - counter)  # Setting the reuse distance for that block
+                self.pg_table[ref_block].reuse_distance = (len(self.lir_stack) - counter)  # Setting the reuse distance for that block
 
                 # gathering training data and label data of objects in cache
-                if count_nonevict <= train_amount / 2:
+                if count_nonevict <= train_amount/2:
                     training_data.append([self.pg_table[ref_block].reuse_distance, self.pg_table[ref_block].min_b_range,
-                                          self.pg_table[ref_block].max_b_range, self.pg_table[ref_block].median])
+                                            self.pg_table[ref_block].max_b_range, self.pg_table[ref_block].median])
                     label_data.append(1)
                     count_nonevict += 1
 
-                del self.lir_stack[ref_block]
+                del self.lir_stack[ref_block] 
                 self.find_lru(self.lir_stack, self.pg_table)
 
-            self.pg_table[ref_block].is_resident = True  # Sets the blocks residency in the LIR stack to True.
-            self.lir_stack[ref_block] = self.pg_table[ref_block].b_num  # Adds the block to the LIR stack.
+            self.pg_table[ref_block].is_resident = True # Sets the blocks residency in the LIR stack to True.
+            self.lir_stack[ref_block] = self.pg_table[ref_block].b_num # Adds the block to the LIR stack.
 
-            if self.pg_table[ref_block].is_hir and self.pg_table[
-                ref_block].in_stack:  # Logic for if the block is HIR and is a resident in LIR.
+            if self.pg_table[ref_block].is_hir and self.pg_table[ref_block].in_stack: # Logic for if the block is HIR and is a resident in LIR.
                 # If above is true, it makes the HIR block a LIR block.
                 self.pg_table[ref_block].is_hir = False
                 self.lir_size += 1
 
-                if self.lir_size > mem - self.HIR_SIZE:  # If LIR stack is now greater than it's max size, it prunes itself.
+                if self.lir_size > mem - self.HIR_SIZE: # If LIR stack is now greater than it's max size, it prunes itself.
                     self.replace_lir_block(self.pg_table, self.lir_size)
 
-            elif self.pg_table[ref_block].is_hir:  # If it is an HIR block but not in the stack.
-                if not trained:  # Standard LIRS logic.
+            elif self.pg_table[ref_block].is_hir: # If it is an HIR block but not in the stack.
+                if not trained: # Standard LIRS logic.
                     self.hir_stack[ref_block] = self.pg_table[ref_block].b_num
-                else:  # If trained, it now takes advantage of ML model.
+                else: # If trained, it now takes advantage of ML model.
                     # prediction = model(torch.sigmoid(torch.tensor([pg_table[ref_block][4], pg_table[ref_block][5],
                     #                                                pg_table[ref_block][6], pg_table[ref_block][7]])
                     #                                  .type(torch.FloatTensor)))
 
-                    feature = np.array(
-                        [[self.pg_table[ref_block].reuse_distance], [self.pg_table[ref_block].min_b_range],
-                         [self.pg_table[ref_block].max_b_range], [self.pg_table[ref_block].median]])
+                    feature = np.array([[self.pg_table[ref_block].reuse_distance], [self.pg_table[ref_block].min_b_range],
+                                        [self.pg_table[ref_block].max_b_range], [self.pg_table[ref_block].median]])
                     prediction = model.predict(feature.reshape(1, -1))
                     if prediction == 1:
                         self.pg_table[ref_block].is_hir = False
@@ -244,16 +237,13 @@ class LIRS:
             self.pg_table[ref_block].in_stack = True
 
             last_ref_block = ref_block
-        self.result.write(str(self.mem) + ',' + str(self.pg_faults / (self.pg_hits + self.pg_faults) * 100) + ',' + str(
-            self.pg_hits / (self.pg_hits + self.pg_faults) * 100) + "\n")
+        self.result.write(str(self.mem) + ',' + str(self.pg_faults / (self.pg_hits + self.pg_faults) * 100) + ',' + str(self.pg_hits / (self.pg_hits + self.pg_faults) * 100) + "\n")
         self.print_information(mem, self.pg_hits, self.pg_faults, self.HIR_SIZE)
-        self.info.write(
-            f"{str(self.mem)},{str(self.in_stack_miss / len(self.trace))},{str(self.out_stack_hit / len(self.trace))}\n")
-
-
+        self.info.write(f"{str(self.mem)},{str(self.in_stack_miss/len(self.trace))},{str(self.out_stack_hit/len(self.trace))}\n")
+    
 if __name__ == "__main__":
     if (len(sys.argv) != 2):
-        raise ("Argument Error")
+        raise("Argument Error")
 
     # Read the trace
     tName = sys.argv[1]
@@ -271,9 +261,9 @@ if __name__ == "__main__":
     try:
         os.mkdir(path)
     except OSError:
-        print("Creation of the directory %s failed" % path)
+        print ("Creation of the directory %s failed" % path)
     else:
-        print("Successfully created the directory %s " % path)
+        print ("Successfully created the directory %s " % path)
 
     # Store the hit&miss ratio
     result = open("result_set/" + tName + "/ml_lirs_" + tName, "w")
