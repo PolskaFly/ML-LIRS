@@ -6,7 +6,7 @@ import sys
 WORK_SPACE = './myLirs/'
 
 markers = ['X', 'o', 'v', '.', '+', '1']
-algo = ['LIRS', 'ML-LIRS']
+algo = ['LIRS', 'ML-LIRS', 'OPT']
 colors = ['r', 'g', 'k', 'y', 'm', 'b']
 
 def plot(X, Y, tName):
@@ -55,6 +55,7 @@ if __name__ == "__main__":
     miss_rate_set = []
     miss_rate_set.append(get_result("../result_set/" + tName + "/lirs_" + tName))
     miss_rate_set.append(get_result("../result_set/" + tName + "/ml_lirs_" + tName))
+    miss_rate_set.append(get_result("../result_set/" + tName + "/" + tName + "-OPT"))
 
     # Get the trace parameter
     MAX_MEMORY = []

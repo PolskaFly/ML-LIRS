@@ -114,7 +114,7 @@ class LIRS:
         trained = False
         training_data = deque()
         label_data = deque()
-        train_amount = 100
+        train_amount = 2000
         count_nonevict = 0
         count_evict = 0
 
@@ -186,6 +186,7 @@ class LIRS:
             if self.pg_table[ref_block].is_resident:
                 self.pg_hits += 1
 
+            # If the refer block in the lir stack
             if self.lir_stack.get(ref_block):
                 counter = 0
                 for j in self.lir_stack.keys():  # Getting the reuse distance
@@ -219,12 +220,14 @@ class LIRS:
                 if not trained: # Standard LIRS logic.
                     self.hir_stack[ref_block] = self.pg_table[ref_block].b_num
                 else: # If trained, it now takes advantage of ML model.
+
                     # prediction = model(torch.sigmoid(torch.tensor([pg_table[ref_block][4], pg_table[ref_block][5],
                     #                                                pg_table[ref_block][6], pg_table[ref_block][7]])
                     #                                  .type(torch.FloatTensor)))
 
                     feature = np.array([[self.pg_table[ref_block].reuse_distance], [self.pg_table[ref_block].min_b_range],
                                         [self.pg_table[ref_block].max_b_range], [self.pg_table[ref_block].median]])
+
                     prediction = model.predict(feature.reshape(1, -1))
                     if prediction == 1:
                         self.pg_table[ref_block].is_hir = False
@@ -248,7 +251,7 @@ if __name__ == "__main__":
     # Read the trace
     tName = sys.argv[1]
     trace = []
-    with open('trace/' + tName, "r") as f:
+    with open('../trace/' + tName, "r") as f:
         for line in f.readlines():
             if not line == "*\n":
                 trace.append(int(line))
@@ -257,7 +260,7 @@ if __name__ == "__main__":
     vm_size = max(trace)
 
     # define the name of the directory to be created
-    path = "result_set/" + tName
+    path = "../result_set/" + tName
     try:
         os.mkdir(path)
     except OSError:
@@ -266,14 +269,14 @@ if __name__ == "__main__":
         print ("Successfully created the directory %s " % path)
 
     # Store the hit&miss ratio
-    result = open("result_set/" + tName + "/ml_lirs_" + tName, "w")
+    result = open("../result_set/" + tName + "/ml_lirs_" + tName, "w")
 
     # in stack miss, out stack hit
-    info = open("result_set/" + tName + "/ml_lirs_info_" + tName, "w")
+    info = open("../result_set/" + tName + "/ml_lirs_info_" + tName, "w")
 
     # Get the trace parameter
     MAX_MEMORY = []
-    with codecs.open("cache_size/" + tName, "r", "UTF8") as inputFile:
+    with codecs.open("../cache_size/" + tName, "r", "UTF8") as inputFile:
         inputFile = inputFile.readlines()
     for line in inputFile:
         if not line == "*\n":
@@ -283,6 +286,7 @@ if __name__ == "__main__":
         lirs = LIRS(trace, mem, result, info)
         lirs.ML_LIRS_Replace_Algorithm()
     result.close()
+    info.close()
 
 #     f = open("evictions.txt", "w")
 #     for i in range(len(eviction_list)):

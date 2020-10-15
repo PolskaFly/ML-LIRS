@@ -15,7 +15,7 @@ def plot(X, Y, tName):
         plt.plot(X, y, color=colors[i], marker=markers[i], label = algo[i], alpha=0.6)
     plt.title(tName)
     plt.xlabel('Cache Size')
-    plt.ylabel('Miss Rate(%)')
+    plt.ylabel('Ratio(%)')
     plt.legend()
     """
     Set y axis begin at 0

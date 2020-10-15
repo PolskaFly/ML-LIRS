@@ -184,6 +184,7 @@ if __name__ == "__main__":
         lirs = LIRS(trace, mem, result, info)
         lirs.LIRS_Replace_Algorithm()
     result.close()
+    info.close()
 
 #     f = open("evictions.txt", "w")
 #     for i in range(len(eviction_list)):
