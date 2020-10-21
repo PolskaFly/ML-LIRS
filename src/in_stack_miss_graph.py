@@ -9,7 +9,7 @@ markers = ['X', 'o', 'v', '.', '+', '1']
 algo = ['LIRS-ISM', 'LIRS-OSH', 'ML-LIRS-ISM', 'ML-LIRS-OSH']
 colors = ['r', 'g', 'k', 'y', 'm', 'b']
 
-def plot(X, Y, tName):
+def plot(X, Y, tName, args):
     for i, y in enumerate(Y):
         y = [float(_) for _ in y]
         plt.plot(X, y, color=colors[i], marker=markers[i], label = algo[i], alpha=0.6)
@@ -21,7 +21,7 @@ def plot(X, Y, tName):
     Set y axis begin at 0
     """
     plt.ylim(bottom=0)
-    plt.savefig("../graph/in_stack_miss/" + tName)
+    plt.savefig("../graph/in_stack_miss/" + tName + args)
     plt.close()
         
 def get_result(path):
@@ -51,10 +51,10 @@ def get_result(path):
     
     
 if __name__ == "__main__":
-    if (len(sys.argv) != 2):
+    if (len(sys.argv) != 3):
         raise("Argument Error")
     tName = sys.argv[1]
-
+    args = sys.argv[2]
     miss_rate_set = []
     lirs_ISM, lirs_OSH = get_result("../result_set/" + tName + "/lirs_info_" + tName)
     ml_lirs_ISM, ml_lirs_OSH = get_result("../result_set/" + tName + "/ml_lirs_info_" + tName)
@@ -67,6 +67,6 @@ if __name__ == "__main__":
     for line in inputFile:
         if not line == "*\n":
             MAX_MEMORY.append(int(line))
-    plot(MAX_MEMORY, miss_rate_set, tName)
+    plot(MAX_MEMORY, miss_rate_set, tName, args)
 
 
