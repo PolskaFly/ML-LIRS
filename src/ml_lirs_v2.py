@@ -129,7 +129,7 @@ class LIRS:
             if self.lir_stack.get(ref_block):
                 # use the real value and last reference features to update the model
                 # print(np.array([[self.pg_table[ref_block].reuse_distance]]), np.array([-1 if self.pg_table[ref_block].is_hir else 1]))
-                model.partial_fit(np.array([[self.pg_table[ref_block].reuse_distance]]), np.array([-1 if self.pg_table[ref_block].is_hir else 1], ), classes = np.array([1, -1]))
+                model.partial_fit(np.array([[self.pg_table[ref_block].reuse_distance]]), np.array([-1 if self.pg_table[ref_block].in_stack else 1], ), classes = np.array([1, -1]))
 
                 counter = 0
                 for j in self.lir_stack.keys():  # Getting the reuse distance
@@ -151,12 +151,8 @@ class LIRS:
 
                 if self.lir_size > mem - self.HIR_SIZE:
                     self.replace_lir_block(self.pg_table, self.lir_size)
-
+                
             elif self.pg_table[ref_block].is_hir:
-                self.hir_stack[ref_block] = self.pg_table[ref_block].b_num
-                self.pg_table[ref_block].last_status = -1
-            elif not self.pg_table[ref_block].is_hir:
-                self.pg_table[ref_block].last_status = 1
 
                 if not self.train: # Standard LIRS logic.
                     self.hir_stack[ref_block] = self.pg_table[ref_block].b_num
