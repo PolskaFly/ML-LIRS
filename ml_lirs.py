@@ -87,16 +87,15 @@ class LIRS:
             del temp[0]
 
     def find_lru(self, s: OrderedDict):
-        temp_s = list(s)
         # Always get first item of the temp_s
-        while self.pg_table[temp_s[0]].is_hir:
-            self.pg_table[temp_s[0]].in_stack = False
-            if temp_s[0] == next(iter(self.train_stack)):  # may need to find a more performant way of doing this check.
+        while self.pg_table[next(iter(s))].is_hir:
+            temp = next(iter(s))
+            self.pg_table[temp].in_stack = False
+            if temp == next(iter(self.train_stack)):
                 self.train_stack.popitem(last=False)
-                self.find_boundary(s)
+                self.find_boundary(temp)
                 self.third_mem += 1
             s.popitem(last=False)
-            del temp_s[0]
 
     def get_range(self, trace) -> int:
         max = 0
