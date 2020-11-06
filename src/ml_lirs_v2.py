@@ -52,6 +52,7 @@ class LIRS:
         self.result = result
         self.info = info
         self.train = False
+        self.count_exampler = 0
 
     def find_lru(self, s: OrderedDict, pg_table: deque):
         temp_s = list(s)
@@ -114,7 +115,6 @@ class LIRS:
                     evicted_hir = self.hir_stack.popitem(last=False)
                     self.pg_table[evicted_hir[1]].is_resident = False
                     self.free_mem += 1
-                    self.train = True
                 elif self.free_mem > self.HIR_SIZE:
                     self.pg_table[ref_block].is_hir = False
                     self.lir_size += 1
@@ -125,12 +125,13 @@ class LIRS:
 
             if self.pg_table[ref_block].is_resident:
                 self.pg_hits += 1
+            
 
             if self.lir_stack.get(ref_block):
                 # use the real value and last reference features to update the model
                 # print(np.array([[self.pg_table[ref_block].reuse_distance]]), np.array([-1 if self.pg_table[ref_block].is_hir else 1]))
                 model.partial_fit(np.array([[self.pg_table[ref_block].reuse_distance]]), np.array([-1 if self.pg_table[ref_block].in_stack else 1], ), classes = np.array([1, -1]))
-
+                self.count_exampler += 1
                 counter = 0
                 for j in self.lir_stack.keys():  # Getting the reuse distance
                     counter += 1
@@ -141,6 +142,10 @@ class LIRS:
 
                 del self.lir_stack[ref_block]
                 self.find_lru(self.lir_stack, self.pg_table)
+
+            # when use the data to predict the model
+            if (self.count_exampler == self.mem // 10):
+                self.train = True
 
             self.pg_table[ref_block].is_resident = True
             self.lir_stack[ref_block] = self.pg_table[ref_block].b_num
