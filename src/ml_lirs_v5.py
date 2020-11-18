@@ -53,7 +53,7 @@ class Trace:
 class WriteToFile:
     def __init__(self, tName):
         self.tName = tName
-        self.FILE = open("result_set/" + self.tName + "/ml_lirs_" + self.tName, "w")
+        self.FILE = open("result_set/" + self.tName + "/ml_lirs_v5_" + self.tName, "w")
 
     def write_to_file(self, *args):
         data = ",".join(args)
@@ -79,7 +79,7 @@ class LIRS_Replace_Algorithm:
         if self.HIR_SIZE < MIN_HIR_MEMORY:
             self.HIR_SIZE = MIN_HIR_MEMORY
 
-        self.dynamic_mem = mem_size * .1
+        self.dynamic_mem = self.HIR_SIZE
         self.dynamic_init = False
 
         self.Stack_S_Head = None
@@ -267,7 +267,7 @@ class LIRS_Replace_Algorithm:
                 self.Stack_Q_Tail.is_resident = False
                 # self.page_table[self.Stack_Q_Tail.block_number].is_resident = False
 
-                if self.Stack_Q_Tail.recency and not self.dynamic_init:
+                if self.Stack_Q_Tail.recency and not self.dynamic_init: # Initialization of stack.
                     self.Rmax0 = self.Stack_Q_Tail
                     ptr = self.Rmax0
                     while ptr:
@@ -275,10 +275,10 @@ class LIRS_Replace_Algorithm:
                         ptr = ptr.LIRS_next
                     self.dynamic_init = True
                     self.dynamic_mem -= 1
-                if self.dynamic_mem > 0 and self.Stack_Q_Tail.recency0:
+                if self.dynamic_mem > 0 and self.Stack_Q_Tail.recency0: # checks if eviction is in stack and subs mem.
                     self.dynamic_mem -= 1
                 if self.Stack_Q_Tail.recency0 and self.dynamic_mem == 0:
-                    self.find_new_Rmax0()
+                    self.find_new_Rmax0() # this is where error occurs. Rmax0 is lost and mem is 0, even though it should be an empty stack.
 
                 self.remove_stack_Q(self.Stack_Q_Tail.block_number)  # func(): remove block in the tail of stack Q
                 self.Free_Memory_Size += 1
@@ -295,7 +295,7 @@ class LIRS_Replace_Algorithm:
 
         # find new Rmax0
         if self.Rmax0:
-            if self.Rmax0 == self.page_table[ref_block]:
+            if self.Rmax0 == self.page_table[ref_block]: # if accessed block is rmax0, then prune to a new non res.
                 self.find_new_Rmax0()
                 self.dynamic_mem += 1
 
@@ -338,13 +338,12 @@ class LIRS_Replace_Algorithm:
         self.add_stack_S(ref_block)
 
         if self.page_table[ref_block].recency0 and not self.page_table[ref_block].is_resident:
-            self.dynamic_mem += 1
+            self.dynamic_mem += 1 # if a non res block is accessed within the stack, it increases memory available
 
         self.page_table[ref_block].is_resident = True
 
         # start predict
         if self.train:
-
             feature = np.array([self.page_table[ref_block].position + [self.page_table[ref_block].refer_times]])
             prediction = self.model.predict(feature.reshape(1, -1))
             self.predict_times += 1
@@ -396,11 +395,6 @@ class LIRS_Replace_Algorithm:
         self.page_table[ref_block].recency = True
         self.page_table[ref_block].recency0 = True
         self.page_table[ref_block].refer_times += 1
-        # if (v_time % 100 == 1):
-        # print ("lir_size : ", self.lir_size)
-        # self.resident_number()
-
-        # self.print_stack(v_time)
 
 
 def main(t_name, start_predict, mini_batch):
@@ -414,7 +408,7 @@ def main(t_name, start_predict, mini_batch):
     # memory_size = [1000]
     for memory in memory_size:
         model = SGDClassifier(loss="log", eta0=1, learning_rate="adaptive", penalty="l2")
-        # model = BernoulliNB()
+        #model = BernoulliNB()
         lirs_replace = LIRS_Replace_Algorithm(t_name, trace_obj.vm_size, trace_dict, memory, trace_size, model,
                                               start_predict, mini_batch)
         for v_time, ref_block in enumerate(trace):
@@ -431,10 +425,3 @@ if __name__ == "__main__":
     start_predict = int(sys.argv[2])
     mini_batch = int(sys.argv[3])
     main(t_name, start_predict, mini_batch)
-
-node = Node(5)
-
-node1 = node
-
-node.next = 1
-node.prev = 2
