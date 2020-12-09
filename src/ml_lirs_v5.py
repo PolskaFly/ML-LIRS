@@ -375,6 +375,10 @@ class LIRS_Replace_Algorithm:
                     else:
                         self.page_table[ref_block].is_hir = True
 
+                    if self.page_table[ref_block].recency0:
+                        self.page_table[ref_block].recency0 = False
+                        self.dynamic_mem += 1
+
                 elif (prediction == 1):
                     # L -> L do nothing
                     pass
