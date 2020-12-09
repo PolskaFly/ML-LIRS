@@ -190,7 +190,8 @@ class LIRS_Replace_Algorithm:
 
     def find_new_Rmax0(self):
         if not self.Rmax0:
-            raise ("Warning Rmax0 \n")
+            self.dynamic_init = False
+            return
         self.Rmax0.recency0 = False
         ptr = self.Rmax0.LIRS_next
         while ptr:
