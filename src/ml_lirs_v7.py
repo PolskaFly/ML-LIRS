@@ -19,6 +19,7 @@ class Node:
         self.recency = False  # Rmax boundary
         self.recency0 = False  # LRU boundary
         self.refer_times = 0
+        self.evicted_times = 0
         self.reuse_distance = 0
         self.position = [0, 0, 1]
 
@@ -211,7 +212,6 @@ class LIRS_Replace_Algorithm:
                 break
             ptr.recency0 = False
             ptr = ptr.LIRS_prev
-
         if ptr:
             ptr.recency0 = True
             self.Rmax0 = ptr
@@ -235,8 +235,31 @@ class LIRS_Replace_Algorithm:
         while ptr:
             if not ptr.is_resident:
                 break
+            if ptr == self.Rmax:
+                break
             ptr.recency0 = True
             ptr = ptr.LIRS_next
+        if ptr:
+            ptr.recency0 = True
+            self.Rmax0 = ptr
+        else:
+            self.Rmax0_lost = True
+            self.dynamic_init = False
+    def find_rmax0_resident(self, block):
+        """
+         if not self.Rmax0:
+            self.dynamic_init = False
+            self.Rmax0_lost = True
+            return
+        """
+        if not self.Rmax0:
+            raise ("Warning Rmax0 \n")
+        ptr = self.Rmax0.LIRS_prev
+        while ptr:
+            if ptr == block:
+                break
+            ptr.recency0 = False
+            ptr = ptr.LIRS_prev
         if ptr:
             ptr.recency0 = True
             self.Rmax0 = ptr
@@ -292,13 +315,16 @@ class LIRS_Replace_Algorithm:
 
     def debug_print(self):
         count = 0
-        ptr = self.Rmax0
+        total = 0
+        ptr = self.Rmax
         while ptr:
-            if not ptr.is_resident and ptr.recency0:
+            total += 1
+            if ptr.recency0:
                 count += 1
             ptr = ptr.LIRS_prev
-        print(self.MAX_DYNAMIC - self.dynamic_mem)
+        print(total)
         print(count)
+        print(count/total)
         print()
 
     def LIRS(self, v_time, ref_block):
@@ -319,6 +345,7 @@ class LIRS_Replace_Algorithm:
 
             if self.Free_Memory_Size == 0:
                 self.Stack_Q_Tail.is_resident = False
+                self.Stack_Q_Tail.evicted_times += 1
                 # self.page_table[self.Stack_Q_Tail.block_number].is_resident = False
 
                 if self.Stack_Q_Tail.recency and not self.dynamic_init: # Initialization of dynamic stack.
@@ -334,6 +361,10 @@ class LIRS_Replace_Algorithm:
                             ptr.recency0 = False
                             ptr = ptr.LIRS_prev
                         self.Rmax0_lost = False
+
+                if self.Stack_Q_Tail.recency0 and self.dynamic_init and self.Stack_Q_Tail.evicted_times == 2:
+                    self.find_new_Rmax0()
+                    self.Stack_Q_Tail.evicted_times = 0
 
                 self.remove_stack_Q(self.Stack_Q_Tail.block_number)  # func(): remove block in the tail of stack Q
                 self.Free_Memory_Size += 1
@@ -352,8 +383,27 @@ class LIRS_Replace_Algorithm:
         if self.Rmax0:
             if self.Rmax0 == self.page_table[ref_block]: # if accessed block is rmax0, then prune to a new non res.
                 self.look_down()
-            if self.Rmax0 == self.Rmax:
-                self.find_new_Rmax0()
+            if self.page_table[ref_block].recency0:
+                self.find_rmax0_resident(self.page_table[ref_block])
+
+
+
+        if v_time == 500:
+            self.debug_print()
+        if v_time == 700:
+            self.debug_print()
+        if v_time == 1000:
+            self.debug_print()
+        if v_time == 1300:
+            self.debug_print()
+        if v_time == 3000:
+            self.debug_print()
+        if v_time == 5000:
+            self.debug_print()
+        if v_time == 8000:
+            self.debug_print()
+        if v_time == 20000:
+            self.debug_print()
 
         if self.page_table[ref_block].refer_times > 0:
             self.count_exampler += 1
