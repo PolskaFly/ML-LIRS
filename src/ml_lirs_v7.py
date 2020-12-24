@@ -25,8 +25,8 @@ class Node:
 
 class Trace:
     def __init__(self, tName):
-        self.trace_path = 'trace/' + tName
-        self.parameter_path = 'cache_size/' + tName
+        self.trace_path = '/Users/polskafly/PycharmProjects/ML_Cache/trace/' + tName
+        self.parameter_path = '/Users/polskafly/PycharmProjects/ML_Cache/cache_size/' + tName
         self.trace = []
         self.memory_size = []
         self.vm_size = -1
@@ -55,7 +55,8 @@ class Trace:
 class WriteToFile:
     def __init__(self, tName):
         self.tName = tName
-        self.FILE = open("result_set/" + self.tName + "/ml_lirs_v5_" + self.tName, "w")
+        __location__ = os.path.realpath("result_set/" + tName)
+        self.FILE = open("/Users/polskafly/PycharmProjects/ML_Cache/result_set/" + tName + "/ml_lirs_v7_" + tName, "w+")
 
     def write_to_file(self, *args):
         data = ",".join(args)
@@ -78,14 +79,11 @@ class LIRS_Replace_Algorithm:
         self.MEMORY_SIZE = mem_size
         self.Free_Memory_Size = mem_size
         HIR_PERCENTAGE = 1.0
-        self.DYNAMIC_PERCENTAGE = 5.0
-        self.MAX_DYNAMIC = 25
         MIN_HIR_MEMORY = 2
         self.HIR_SIZE = mem_size * (HIR_PERCENTAGE / 100)
         if self.HIR_SIZE < MIN_HIR_MEMORY:
             self.HIR_SIZE = MIN_HIR_MEMORY
 
-        self.dynamic_mem = mem_size * (self.DYNAMIC_PERCENTAGE/100)
         self.dynamic_init = False
 
         self.Stack_S_Head = None
@@ -96,6 +94,7 @@ class LIRS_Replace_Algorithm:
         self.lir_size = 0
         self.Rmax = None
         self.Rmax0 = None
+        self.Rmax0_lost = False
 
         self.page_fault = 0
         self.page_hit = 0
@@ -192,26 +191,58 @@ class LIRS_Replace_Algorithm:
 
             if self.Rmax == self.Rmax0:
                 self.Rmax0 = self.find_new_Rmax0()
-                self.dynamic_mem += 1
 
             self.Rmax = self.Rmax.LIRS_prev
 
+    #function to prune the dynamic stack normally
     def find_new_Rmax0(self):
+        """
         if not self.Rmax0:
             self.dynamic_init = False
-            print(self.dynamic_mem)
-            self.dynamic_mem = self.MEMORY_SIZE * (self.DYNAMIC_PERCENTAGE/100)
+            self.Rmax0_lost = True
             return
+        """
+        if not self.Rmax0:
+            raise ("Warning Rmax0 \n")
         self.Rmax0.recency0 = False
         ptr = self.Rmax0.LIRS_prev
         while ptr:
             if not ptr.is_resident:
-                self.Rmax0 = ptr
                 break
             ptr.recency0 = False
             ptr = ptr.LIRS_prev
 
+        if ptr:
+            ptr.recency0 = True
+            self.Rmax0 = ptr
+        else:
+            self.Rmax0_lost = True
+            self.dynamic_init = False
+
         return self.Rmax0
+
+    #Function that when the Rmax0 is accessed, it searches downwards. Edge case.
+    def look_down(self):
+        """
+         if not self.Rmax0:
+            self.dynamic_init = False
+            self.Rmax0_lost = True
+            return
+        """
+        if not self.Rmax0:
+            raise ("Warning Rmax0 \n")
+        ptr = self.Rmax0.LIRS_prev
+        while ptr:
+            if not ptr.is_resident:
+                break
+            ptr.recency0 = True
+            ptr = ptr.LIRS_next
+        if ptr:
+            ptr.recency0 = True
+            self.Rmax0 = ptr
+        else:
+            self.Rmax0_lost = True
+            self.dynamic_init = False
 
     def get_reuse_distance(self, ref_block):
         ptr = self.Stack_S_Head
@@ -279,15 +310,6 @@ class LIRS_Replace_Algorithm:
             self.page_hit += 1
             return
 
-        if v_time == 500:
-            self.debug_print()
-        elif v_time == 1000:
-            self.debug_print()
-        elif v_time == 5000:
-            self.debug_print()
-        elif v_time == 20000:
-            self.debug_print()
-
         self.last_ref_block = ref_block
         self.page_table[ref_block].refer_times += 1
         if not self.page_table[ref_block].is_resident:
@@ -306,11 +328,12 @@ class LIRS_Replace_Algorithm:
                         ptr.recency0 = True
                         ptr = ptr.LIRS_prev
                     self.dynamic_init = True
-                    self.dynamic_mem -= 1
-                elif self.dynamic_mem > 0 and self.Stack_Q_Tail.recency0: # checks if eviction is in stack and subs mem.
-                    self.dynamic_mem -= 1
-                elif self.Stack_Q_Tail.recency0 and self.dynamic_mem == 0:
-                    self.Rmax0 = self.find_new_Rmax0() # this is where error occurs. Rmax0 is lost and mem is 0, even though it should be an empty stack.
+                    if self.Rmax0_lost:
+                        ptr = self.Rmax
+                        while ptr != self.Rmax0:
+                            ptr.recency0 = False
+                            ptr = ptr.LIRS_prev
+                        self.Rmax0_lost = False
 
                 self.remove_stack_Q(self.Stack_Q_Tail.block_number)  # func(): remove block in the tail of stack Q
                 self.Free_Memory_Size += 1
@@ -328,10 +351,9 @@ class LIRS_Replace_Algorithm:
         # find new Rmax0
         if self.Rmax0:
             if self.Rmax0 == self.page_table[ref_block]: # if accessed block is rmax0, then prune to a new non res.
-                self.Rmax0 = self.find_new_Rmax0()
-                self.dynamic_mem += 1
-            elif self.page_table[ref_block].recency0 and not self.page_table[ref_block].is_resident:
-                self.dynamic_mem += 1  # if a non res block is accessed within the stack, it increases memory available
+                self.look_down()
+            if self.Rmax0 == self.Rmax:
+                self.find_new_Rmax0()
 
         if self.page_table[ref_block].refer_times > 0:
             self.count_exampler += 1
