@@ -6,7 +6,7 @@ from sklearn.naive_bayes import BernoulliNB
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.naive_bayes import ComplementNB
 
-
+# Maybe change it from being based on non resident. Instead it is based on accesses. Everything above an access is in the boundary.
 class Node:
     def __init__(self, b_num):
         self.block_number = b_num
@@ -57,7 +57,7 @@ class WriteToFile:
     def __init__(self, tName):
         self.tName = tName
         __location__ = os.path.realpath("result_set/" + tName)
-        self.FILE = open("/Users/polskafly/PycharmProjects/ML_Cache/result_set/" + tName + "/ml_lirs_v7_" + tName, "w+")
+        self.FILE = open("/Users/polskafly/PycharmProjects/ML_Cache/result_set/" + tName + "/ml_lirs_v6_" + tName, "w+")
 
     def write_to_file(self, *args):
         data = ",".join(args)
@@ -387,7 +387,7 @@ class LIRS_Replace_Algorithm:
                 self.find_rmax0_resident(self.page_table[ref_block])
 
 
-
+        """
         if v_time == 500:
             self.debug_print()
         if v_time == 700:
@@ -404,6 +404,7 @@ class LIRS_Replace_Algorithm:
             self.debug_print()
         if v_time == 20000:
             self.debug_print()
+        """
 
         if self.page_table[ref_block].refer_times > 0:
             self.count_exampler += 1
