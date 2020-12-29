@@ -116,7 +116,7 @@ class LIRS_Replace_Algorithm:
         self.mini_batch_X = np.array([])
         self.mini_batch_X = np.array([])
 
-        self.position_importance = {0: 1, 1: 2, 2: 3}
+        self.position_importance = {0: 1, 1: 2, 2: 3} #changed weight
 
         # self.start_use_model = start_use_model
         # self.mini_batch = mini_batch
@@ -226,12 +226,6 @@ class LIRS_Replace_Algorithm:
 
     #Function that when the Rmax0 is accessed, it searches downwards. Edge case.
     def look_down(self):
-        """
-         if not self.Rmax0:
-            self.dynamic_init = False
-            self.Rmax0_lost = True
-            return
-        """
         if not self.Rmax0:
             raise ("Warning Rmax0 \n")
         ptr = self.Rmax0.LIRS_prev
@@ -249,12 +243,6 @@ class LIRS_Replace_Algorithm:
             self.Rmax0_lost = True
             self.dynamic_init = False
     def find_rmax0_resident(self, block):
-        """
-         if not self.Rmax0:
-            self.dynamic_init = False
-            self.Rmax0_lost = True
-            return
-        """
         if not self.Rmax0:
             raise ("Warning Rmax0 \n")
         ptr = self.Rmax0
@@ -336,6 +324,7 @@ class LIRS_Replace_Algorithm:
         print()
 
     def LIRS(self, v_time, ref_block):
+        """
         if v_time % 5000 == 0 and v_time != 0:
             h = (self.page_hit - self.temp_hit) / ((self.page_fault - self.temp_fault) +
                                                                   (self.page_hit - self.temp_hit)) * 100
@@ -344,10 +333,10 @@ class LIRS_Replace_Algorithm:
             FILE.write(str(v_time) + "," + str(h) + "\n")
             self.temp_hit = self.page_hit
             self.temp_fault = self.page_fault
+        """
 
         if not self.page_table[ref_block].recency:
             self.out_stack_hit += 1
-            # print("out stack hit", v_time, ref_block)
 
         if (ref_block == self.last_ref_block):
             self.page_hit += 1
@@ -357,13 +346,10 @@ class LIRS_Replace_Algorithm:
         self.page_table[ref_block].refer_times += 1
         if not self.page_table[ref_block].is_resident:
             self.page_fault += 1
-            # print (v_time, ref_block, 0)
-            # self.print_stack(v_time)
 
             if self.Free_Memory_Size == 0:
                 self.Stack_Q_Tail.is_resident = False
                 self.Stack_Q_Tail.evicted_times += 1
-                # self.page_table[self.Stack_Q_Tail.block_number].is_resident = False
 
                 if self.Stack_Q_Tail.recency and not self.dynamic_init: # Initialization of dynamic stack.
                     self.Rmax0 = self.Stack_Q_Tail
@@ -379,9 +365,8 @@ class LIRS_Replace_Algorithm:
                             ptr = ptr.LIRS_prev
                         self.Rmax0_lost = False
 
-                if self.Stack_Q_Tail.recency0 and self.dynamic_init and self.Stack_Q_Tail.evicted_times == 2:
+                if self.Stack_Q_Tail.recency0 and self.dynamic_init and (self.Stack_Q_Tail.evicted_times%2) == 0:
                     self.find_new_Rmax0()
-                    self.Stack_Q_Tail.evicted_times = 0
 
                 self.remove_stack_Q(self.Stack_Q_Tail.block_number)  # func(): remove block in the tail of stack Q
                 self.Free_Memory_Size += 1
@@ -396,26 +381,6 @@ class LIRS_Replace_Algorithm:
         if self.page_table[ref_block].is_resident:
             self.page_hit += 1
 
-
-        """
-        if v_time == 500:
-            self.debug_print()
-        if v_time == 700:
-            self.debug_print()
-        if v_time == 1000:
-            self.debug_print()
-        if v_time == 1300:
-            self.debug_print()
-        if v_time == 3000:
-            self.debug_print()
-        if v_time == 5000:
-            self.debug_print()
-        if v_time == 8000:
-            self.debug_print()
-        if v_time == 20000:
-            self.debug_print()
-        """
-
         if self.page_table[ref_block].refer_times > 0:
             self.count_exampler += 1
             # p_feature = self.position_importance[self.page_table[ref_block].position]
@@ -423,13 +388,13 @@ class LIRS_Replace_Algorithm:
             # self.model.partial_fit(np.array([[self.page_table[ref_block].reuse_distance, p_feature] + [1 if i == self.page_table[ref_block].position else 0 for i in range(3)]]), np.array([1 if self.page_table[ref_block].recency else -1], ), classes = np.array([1, -1]))
             if self.mini_batch_X.all():
                 self.mini_batch_X = np.array(
-                    [self.page_table[ref_block].position + [self.page_table[ref_block].refer_times]])
-                self.mini_batch_Y = np.array([1 if self.page_table[ref_block].recency else -1])
+                    [self.page_table[ref_block].position + [self.page_table[ref_block].refer_times-self.page_table[ref_block].evicted_times]])
+                self.mini_batch_Y = np.array([1 if self.page_table[ref_block].recency else -1]) #changed from .recency
             else:
                 # print(self.mini_batch_X)
                 # self.mini_batch_X = np.r_[self.mini_batch_X, [[p_feature] + [1 if i == self.page_table[ref_block].position else 0 for i in range(3)]]]
                 self.mini_batch_X = np.r_[
-                    self.mini_batch_X, [self.page_table[ref_block].position + [self.page_table[ref_block].refer_times]]]
+                    self.mini_batch_X, [self.page_table[ref_block].position + [self.page_table[ref_block].refer_times-self.page_table[ref_block].evicted_times]]]
                 self.mini_batch_Y = np.r_[self.mini_batch_Y, [1 if self.page_table[ref_block].recency else -1]]
             if len(self.mini_batch_X) == self.start_use_model:
                 self.model.partial_fit(self.mini_batch_X, self.mini_batch_Y, classes=np.array([1, -1]))
@@ -462,10 +427,9 @@ class LIRS_Replace_Algorithm:
         self.add_stack_S(ref_block)
 
         self.page_table[ref_block].is_resident = True
-
         # start predict
         if self.train:
-            feature = np.array([self.page_table[ref_block].position + [self.page_table[ref_block].refer_times]])
+            feature = np.array([self.page_table[ref_block].position + [self.page_table[ref_block].refer_times-self.page_table[ref_block].evicted_times]])
             prediction = self.model.predict(feature.reshape(1, -1))
             self.predict_times += 1
             if (self.page_table[ref_block].is_hir):
@@ -531,7 +495,7 @@ def main(t_name, start_predict, mini_batch):
     # memory_size = [1000]
     for memory in memory_size:
         #model = SGDClassifier(loss="perceptron", eta0=1, learning_rate="adaptive", penalty="elasticnet", n_jobs=-1)
-        #model = BernoulliNB()
+        # model = BernoulliNB()
         model = MultinomialNB()
         #model = ComplementNB()
         lirs_replace = LIRS_Replace_Algorithm(t_name, trace_obj.vm_size, trace_dict, memory, trace_size, model,
