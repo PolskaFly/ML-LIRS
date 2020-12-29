@@ -21,7 +21,7 @@ def plot(X, Y, tName):
     Set y axis begin at 0
     """
     plt.ylim(bottom=0)
-    plt.savefig("../graph/in_stack_miss/" + tName)
+    plt.savefig("graph/in_stack_miss/" + tName)
     plt.close()
         
 def get_result(path):
@@ -56,13 +56,13 @@ if __name__ == "__main__":
     tName = sys.argv[1]
 
     miss_rate_set = []
-    lirs_ISM, lirs_OSH = get_result("../result_set/" + tName + "/lirs_info_" + tName)
-    ml_lirs_ISM, ml_lirs_OSH = get_result("../result_set/" + tName + "/ml_lirs_info_" + tName)
+    lirs_ISM, lirs_OSH = get_result("result_set/" + tName + "/lirs_info_" + tName)
+    ml_lirs_ISM, ml_lirs_OSH = get_result("result_set/" + tName + "/ml_lirs_info_" + tName)
     miss_rate_set = [lirs_ISM, lirs_OSH, ml_lirs_ISM, ml_lirs_OSH]
 
     # Get the trace parameter
     MAX_MEMORY = []
-    with codecs.open("../cache_size/" + tName, "r", "UTF8") as inputFile:
+    with codecs.open("cache_size/" + tName, "r", "UTF8") as inputFile:
         inputFile = inputFile.readlines()
     for line in inputFile:
         if not line == "*\n":

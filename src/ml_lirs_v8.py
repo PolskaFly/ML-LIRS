@@ -325,8 +325,8 @@ class LIRS_Replace_Algorithm:
         print()
 
     def LIRS(self, v_time, ref_block):
-        """
-        if v_time % 5000 == 0 and v_time != 0:
+
+        if v_time % 1000 == 0 and v_time != 0:
             h = (self.page_hit - self.temp_hit) / ((self.page_fault - self.temp_fault) +
                                                                   (self.page_hit - self.temp_hit)) * 100
             FILE = open("/Users/polskafly/PycharmProjects/ML_Cache/result_set/" + "zigzag_multi3" + "/ml_lirs_v8_" + str(self.MEMORY_SIZE)
@@ -334,7 +334,8 @@ class LIRS_Replace_Algorithm:
             FILE.write(str(v_time) + "," + str(h) + "\n")
             self.temp_hit = self.page_hit
             self.temp_fault = self.page_fault
-        """
+            FILE.close()
+
 
         if not self.page_table[ref_block].recency:
             self.out_stack_hit += 1

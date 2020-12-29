@@ -6,13 +6,13 @@ import sys
 WORK_SPACE = './myLirs/'
 
 markers = ['X', 'o', 'v', '.', '+', '1']
-algo = ['LIRS', 'ML-LIRS']
+algo = ['LIRS', 'LRU', 'ML-LIRS', 'OPT']
 colors = ['r', 'g', 'k', 'y', 'm', 'b']
 
 def plot(X, Y, tName):
     for i, y in enumerate(Y):
         y = [float(_) for _ in y]
-        plt.plot(X, y, color=colors[i], marker=markers[i], label = algo[i], alpha=0.6)
+        plt.plot(X, y, color=colors[i], marker=markers[i], label=algo[i], alpha=0.6)
     plt.title(tName)
     plt.xlabel('Cache Size')
     plt.ylabel('Miss Rate(%)')
@@ -21,7 +21,7 @@ def plot(X, Y, tName):
     Set y axis begin at 0
     """
     plt.ylim(bottom=0)
-    plt.savefig("../graph/miss_ratio/" + tName)
+    plt.savefig("graph/miss_ratio/" + tName)
     plt.close()
         
 def get_result(path):
@@ -53,12 +53,14 @@ if __name__ == "__main__":
     tName = sys.argv[1]
 
     miss_rate_set = []
-    miss_rate_set.append(get_result("../result_set/" + tName + "/lirs_" + tName))
-    miss_rate_set.append(get_result("../result_set/" + tName + "/ml_lirs_" + tName))
+    miss_rate_set.append(get_result("result_set/" + tName + "/lirs_" + tName))
+    miss_rate_set.append(get_result("result_set/" + tName + "/lru_" + tName))
+    miss_rate_set.append(get_result("result_set/" + tName + "/ml_lirs_v8_" + tName))
+    miss_rate_set.append(get_result("result_set/" + tName + "/opt_" + tName))
 
     # Get the trace parameter
     MAX_MEMORY = []
-    with codecs.open("../cache_size/" + tName, "r", "UTF8") as inputFile:
+    with codecs.open("cache_size/" + tName, "r", "UTF8") as inputFile:
         inputFile = inputFile.readlines()
     for line in inputFile:
         if not line == "*\n":

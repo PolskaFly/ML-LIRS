@@ -149,16 +149,16 @@ if __name__ == "__main__":
     # Read the trace
     tName = sys.argv[1]
     trace = []
-    with open('../trace/' + tName, "r") as f:
+    with open('trace/' + tName, "r") as f:
         for line in f.readlines():
-            if not line == "*\n":
+            if not line == "*\n" and not line == "\n":
                 trace.append(int(line))
 
     # Get the block range of the trace
     vm_size = max(trace)
 
     # define the name of the directory to be created
-    path = "../result_set/" + tName
+    path = "result_set/" + tName
     try:
         os.mkdir(path)
     except OSError:
@@ -167,14 +167,14 @@ if __name__ == "__main__":
         print ("Successfully created the directory %s " % path)
 
     # Store the hit&miss ratio
-    result = open("../result_set/" + tName + "/lirs_" + tName, "w")
+    result = open("result_set/" + tName + "/lirs_" + tName, "w")
 
     # in stack miss, out stack hit
-    info = open("../result_set/" + tName + "/lirs_info_" + tName, "w")
+    info = open("result_set/" + tName + "/lirs_info_" + tName, "w")
 
     # Get the trace parameter
     MAX_MEMORY = []
-    with codecs.open("../cache_size/" + tName, "r", "UTF8") as inputFile:
+    with codecs.open("cache_size/" + tName, "r", "UTF8") as inputFile:
         inputFile = inputFile.readlines()
     for line in inputFile:
         if not line == "*\n":
