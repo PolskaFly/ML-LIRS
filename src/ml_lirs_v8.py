@@ -292,6 +292,7 @@ class LIRS_Replace_Algorithm:
         print("page hit : ", self.page_hit)
         print("page fault : ", self.page_fault)
         print("Hit ratio: ", self.page_hit / (self.page_fault + self.page_hit) * 100)
+        print("Total: ", (self.page_fault + self.page_hit))
         print("Out stack hit : ", self.out_stack_hit)
         print("Predict Hot: ", self.hot_pred)
         print("Predict Cold: ", self.cold_pred)
@@ -420,8 +421,6 @@ class LIRS_Replace_Algorithm:
                 self.look_down()
             elif self.page_table[ref_block].recency0:
                 self.find_rmax0_resident(self.page_table[ref_block])
-            if self.Rmax0:
-                self.page_table[ref_block].recency0 = True
 
         self.remove_stack_S(ref_block)
         self.add_stack_S(ref_block)
@@ -480,7 +479,8 @@ class LIRS_Replace_Algorithm:
                 self.add_stack_Q(ref_block)  # func():
 
         self.page_table[ref_block].recency = True
-        self.page_table[ref_block].recency0 = True
+        if self.Rmax0:
+            self.page_table[ref_block].recency0 = True
         self.page_table[ref_block].refer_times += 1
 
 
