@@ -122,9 +122,9 @@ class LIRS_Replace_Algorithm:
 
         self.position_importance = {0: 1, 1: 2, 2: 3} #changed weight
 
-        # self.start_use_model = start_use_model
+        self.start_use_model = start_use_model
         # self.mini_batch = mini_batch
-        self.start_use_model = mem_size * 2
+        # self.start_use_model = mem_size * 2
         #self.mini_batch = mem_size
 
     def remove_stack_Q(self, b_num):
