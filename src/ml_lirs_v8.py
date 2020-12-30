@@ -300,7 +300,7 @@ class LIRS_Replace_Algorithm:
         print()
 
     def inter_ratios(self, v_time):
-        if v_time % 250 == 0 and v_time != 0:
+        if v_time % 50 == 0 and v_time != 0:
             counter = 0
             total = 0
             h = (self.page_hit - self.temp_hit) / ((self.page_fault - self.temp_fault) +
