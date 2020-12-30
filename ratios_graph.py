@@ -7,11 +7,11 @@ import os
 WORK_SPACE = './myLirs/'
 
 markers = ['X', 'o', 'v', '.', '+', '1']
-algo = ['LIRS', 'LRU', 'ML-LIRS', 'OPT']
 colors = ['r', 'g', 'k', 'y', 'm', 'b']
 
 
 def plot(X, Y1, Y2, tName, size):
+    fig = plt.figure(figsize=(50, 5))
     x = [int(_) for _ in X]
     y1 = [float(_) for _ in Y1]
     plt.plot(x, y1, color=colors[0], marker=markers[0], label= ('hit_ratio_' + size), alpha=0.6)
@@ -29,7 +29,7 @@ def plot(X, Y1, Y2, tName, size):
         os.mkdir("graph/ratio/" + tName)
     except:
         pass
-    plt.savefig("graph/ratio/" + tName + "/" + tName + "_" + size)
+    plt.savefig("graph/ratio/" + tName + "/" + tName + "_" + size, dpi=300, bbox_inches='tight', pad_inches=0)
     plt.close()
 
 
