@@ -16,8 +16,8 @@ def plot(X, Y1, Y2, tName, size):
     y1 = [float(_) for _ in Y1]
     plt.plot(x, y1, color=colors[0], marker=markers[0], label= ('hit_ratio_' + size), alpha=0.6)
     y2 = [float(_) for _ in Y2]
-    plt.plot(x, y2, color=colors[1], marker=markers[1], label= ('d_ratio_' + size + "(recency0/total)"), alpha=0.6)
-    plt.title(tName + ": Dynamic Size to Hit Ratio")
+    plt.plot(x, y2, color=colors[1], marker=markers[1], label= ('dynamic_ratio_' + size + "(total rmax0/total recency)"), alpha=0.6)
+    plt.title(tName + ": Dynamic Ratio to Hit Ratio")
     plt.xlabel('Virtual Time')
     plt.ylabel('Ratio (%)')
     plt.legend()
