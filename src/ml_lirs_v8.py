@@ -54,10 +54,10 @@ class Trace:
 
 
 class WriteToFile:
-    def __init__(self, tName):
+    def __init__(self, tName, fp):
         self.tName = tName
-        __location__ = os.path.realpath("result_set/" + tName)
-        self.FILE = open("/Users/polskafly/PycharmProjects/ML_Cache/result_set/" + tName + "/ml_lirs_v8_" + tName, "w+")
+        __location__ = "/Users/polskafly/PycharmProjects/ML_Cache/result_set/" + tName
+        self.FILE = open(__location__ + "/ml_lirs_v8_" + fp, "w+")
 
     def write_to_file(self, *args):
         data = ",".join(args)
@@ -99,6 +99,10 @@ class LIRS_Replace_Algorithm:
 
         self.page_fault = 0
         self.page_hit = 0
+
+        self.inter_hit_ratio = []
+        self.dynamic_ratio = []
+        self.virtual_time = []
 
         self.last_ref_block = -1
 
@@ -158,9 +162,6 @@ class LIRS_Replace_Algorithm:
             self.Rmax = self.page_table[b_num].LIRS_prev
             self.find_new_Rmax()
 
-        if (self.page_table[b_num] == self.Rmax0):
-            self.Rmax0 = self.page_table[b_num].LIRS_prev
-
         if (self.page_table[b_num].LIRS_prev and self.page_table[b_num].LIRS_next):
             self.page_table[b_num].LIRS_prev.LIRS_next = self.page_table[b_num].LIRS_next
             self.page_table[b_num].LIRS_next.LIRS_prev = self.page_table[b_num].LIRS_prev
@@ -194,33 +195,27 @@ class LIRS_Replace_Algorithm:
             self.Rmax.recency = False
 
             if self.Rmax == self.Rmax0:
-                self.Rmax0 = self.find_new_Rmax0()
+                self.find_new_Rmax0()
 
             self.Rmax = self.Rmax.LIRS_prev
 
     #function to prune the dynamic stack normally
     def find_new_Rmax0(self):
-        """
-        if not self.Rmax0:
-            self.dynamic_init = False
-            self.Rmax0_lost = True
-            return
-        """
         if not self.Rmax0:
             raise ("Warning Rmax0 \n")
+        if not self.Rmax0.LIRS_prev:
+            return
         self.Rmax0.recency0 = False
         ptr = self.Rmax0.LIRS_prev
         while ptr:
             if not ptr.is_resident:
                 break
+            if not ptr.LIRS_prev:
+                break
             ptr.recency0 = False
             ptr = ptr.LIRS_prev
-        if ptr:
-            ptr.recency0 = True
-            self.Rmax0 = ptr
-        else:
-            self.Rmax0_lost = True
-            self.dynamic_init = False
+        ptr.recency0 = True
+        self.Rmax0 = ptr
 
         return self.Rmax0
 
@@ -228,7 +223,7 @@ class LIRS_Replace_Algorithm:
     def look_down(self):
         if not self.Rmax0:
             raise ("Warning Rmax0 \n")
-        ptr = self.Rmax0.LIRS_prev
+        ptr = self.Rmax0.LIRS_next
         while ptr:
             if not ptr.is_resident:
                 break
@@ -236,29 +231,25 @@ class LIRS_Replace_Algorithm:
                 break
             ptr.recency0 = True
             ptr = ptr.LIRS_next
-        if ptr:
-            ptr.recency0 = True
-            self.Rmax0 = ptr
-        else:
-            self.Rmax0_lost = True
-            self.dynamic_init = False
+        ptr.recency0 = True
+        self.Rmax0 = ptr
+
     def find_rmax0_resident(self, block):
         if not self.Rmax0:
             raise ("Warning Rmax0 \n")
         ptr = self.Rmax0
         while ptr:
             if ptr == block:
-                ptr.recency0 = False
+                ptr.recency0 = True
+                if not ptr.LIRS_prev:
+                    self.Rmax0 = ptr
+                    break
                 ptr = ptr.LIRS_prev
+                ptr.recency0 = True
+                self.Rmax0 = ptr
                 break
             ptr.recency0 = False
             ptr = ptr.LIRS_prev
-        if ptr:
-            ptr.recency0 = True
-            self.Rmax0 = ptr
-        else:
-            self.Rmax0_lost = True
-            self.dynamic_init = False
 
     def get_reuse_distance(self, ref_block):
         ptr = self.Stack_S_Head
@@ -298,17 +289,34 @@ class LIRS_Replace_Algorithm:
         print("Predict Cold: ", self.cold_pred)
         print("Predict Times =", self.predict_times, "H->L", self.predict_H_L, "L->H", self.predict_L_H)
         return self.MEMORY_SIZE, self.page_fault / (self.page_fault + self.page_hit) * 100, self.page_hit / (
-                    self.page_fault + self.page_hit) * 100
+                    self.page_fault + self.page_hit) * 100, self.inter_hit_ratio, self.dynamic_ratio, self.virtual_time
 
     def print_stack(self, v_time):
         ptr = self.Stack_S_Head
         while (ptr):
             print("R" if ptr == self.Rmax0 else "", end="")
-            # print("H" if ptr.is_hir else "L", end="")
-            # print("R" if ptr.is_resident else "N", end="")
             print(ptr.block_number, end="-")
             ptr = ptr.LIRS_next
         print()
+
+    def inter_ratios(self, v_time):
+        if v_time % 500 == 0 and v_time != 0:
+            counter = 0
+            total = 0
+            h = (self.page_hit - self.temp_hit) / ((self.page_fault - self.temp_fault) +
+                                                   (self.page_hit - self.temp_hit)) * 100
+            self.inter_hit_ratio.append(float(h))
+            self.temp_hit = self.page_hit
+            self.temp_fault = self.page_fault
+
+            ptr = self.Rmax
+            while ptr:
+                total += 1
+                if ptr.recency0:
+                    counter += 1
+                ptr = ptr.LIRS_prev
+            self.dynamic_ratio.append(float((counter / total) * 100))
+            self.virtual_time.append(v_time)
 
     def debug_print(self):
         count = 0
@@ -326,16 +334,7 @@ class LIRS_Replace_Algorithm:
 
     def LIRS(self, v_time, ref_block):
 
-        if v_time % 1000 == 0 and v_time != 0:
-            h = (self.page_hit - self.temp_hit) / ((self.page_fault - self.temp_fault) +
-                                                                  (self.page_hit - self.temp_hit)) * 100
-            FILE = open("/Users/polskafly/PycharmProjects/ML_Cache/result_set/" + "zigzag_multi3" + "/ml_lirs_v8_" + str(self.MEMORY_SIZE)
-                        + "_zigzag_multi3", "a+")
-            FILE.write(str(v_time) + "," + str(h) + "\n")
-            self.temp_hit = self.page_hit
-            self.temp_fault = self.page_fault
-            FILE.close()
-
+        self.inter_ratios(v_time)
 
         if not self.page_table[ref_block].recency:
             self.out_stack_hit += 1
@@ -360,12 +359,6 @@ class LIRS_Replace_Algorithm:
                         ptr.recency0 = True
                         ptr = ptr.LIRS_prev
                     self.dynamic_init = True
-                    if self.Rmax0_lost:
-                        ptr = self.Rmax
-                        while ptr != self.Rmax0:
-                            ptr.recency0 = False
-                            ptr = ptr.LIRS_prev
-                        self.Rmax0_lost = False
 
                 if self.Stack_Q_Tail.recency0 and self.dynamic_init and (self.Stack_Q_Tail.evicted_times%2) == 0:
                     self.find_new_Rmax0()
@@ -418,8 +411,10 @@ class LIRS_Replace_Algorithm:
             self.train = True
 
         if self.Rmax0: #if there is an rmax0, then everytime a block is moved to the top of LIRS, it gets a recency0
-            if self.Rmax0 == self.page_table[ref_block]:  # if accessed block is rmax0, then prune to a new non res.
+            if self.Rmax0 == self.page_table[ref_block] and self.Rmax0 != self.Rmax:  # if accessed block is rmax0, then prune to a new non res.
                 self.look_down()
+            elif self.Rmax0 == self.Rmax:
+                self.find_new_Rmax0()
             elif self.page_table[ref_block].recency0:
                 self.find_rmax0_resident(self.page_table[ref_block])
 
@@ -487,25 +482,24 @@ class LIRS_Replace_Algorithm:
 
 def main(t_name, start_predict, mini_batch):
     # result file
-    FILE = WriteToFile(t_name)
+    FILE = WriteToFile(t_name, t_name)
     # get trace
     trace_obj = Trace(t_name)
     # get the trace
     trace, trace_dict, trace_size = trace_obj.get_trace()
     memory_size = trace_obj.get_parameter()
-    # memory_size = [1000]
     for memory in memory_size:
-        #model = SGDClassifier(loss="perceptron", eta0=1, learning_rate="adaptive", penalty="elasticnet", n_jobs=-1)
-        # model = BernoulliNB()
+        RATIO_FILE = WriteToFile(t_name, str(memory) + "_" + t_name + "_ratios")
         model = MultinomialNB()
-        #model = ComplementNB()
         lirs_replace = LIRS_Replace_Algorithm(t_name, trace_obj.vm_size, trace_dict, memory, trace_size, model,
                                               start_predict, mini_batch)
         for v_time, ref_block in enumerate(trace):
             lirs_replace.LIRS(v_time, ref_block)
 
-        memory_size, miss_ratio, hit_ratio = lirs_replace.print_information()
+        memory_size, miss_ratio, hit_ratio, inter_hit_ratio, dynamic_ratio, virtual_time = lirs_replace.print_information()
         FILE.write_to_file(str(memory_size), str(miss_ratio), str(hit_ratio))
+        for i in range(len(inter_hit_ratio)):
+            RATIO_FILE.write_to_file(str(virtual_time[i]), str(inter_hit_ratio[i]), str(dynamic_ratio[i]))
 
 
 if __name__ == "__main__":

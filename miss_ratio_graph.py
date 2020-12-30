@@ -39,7 +39,7 @@ def get_result(path):
             if not flt:
                 continue
             cache_size = int(flt[0].strip('l'))
-            t.append( (cache_size, flt[1], flt[2]) )
+            t.append( (cache_size, flt[1], flt[2]))
         t.sort(key=lambda x: x[0])
         
         for tp in t:
