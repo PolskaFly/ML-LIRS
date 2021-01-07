@@ -14,6 +14,17 @@ class Block:
 HIR_PERCENTAGE = 1.0
 MIN_HIR_MEMORY = 2
 
+class WriteToFile:
+    def __init__(self, tName, fp):
+        self.tName = tName
+        __location__ = "/Users/polskafly/PycharmProjects/ML_Cache/result_set/" + tName
+        self.FILE = open(__location__ + "/lirs_" + fp, "w+")
+
+    def write_to_file(self, *args):
+        data = ",".join(args)
+        # Store the hit&miss ratio
+        self.FILE.write(data + "\n")
+
 class LIRS:
     def __init__(self, trace, mem, result, info):
         self.trace = trace
@@ -41,6 +52,11 @@ class LIRS:
         self.in_stack_miss = 0
         self.out_stack_hit = 0
         self.out_stack_miss = 0
+        self.temp_hit = 0
+        self.temp_fault = 0
+
+        self.virtual_time = []
+        self.inter_hit_ratio = []
 
         self.lir_size = 0
 
@@ -62,12 +78,24 @@ class LIRS:
                 max = x
         return max
 
-    def print_information(self, mem, hits, faults, size):
-        print("Memory Size: ", mem)
-        print("Hits: ", hits)
-        print("Faults: ", faults)
-        print("Total: ", hits + faults)
-        print("Hit Ratio: ", hits / (hits + faults) * 100)
+    def print_information(self):
+        print("Memory Size: ", self.mem)
+        print("Hits: ", self.pg_hits)
+        print("Faults: ", self.pg_faults)
+        print("Total: ", self.pg_hits + self.pg_faults)
+        print("Hit Ratio: ", self.pg_hits / (self.pg_hits + self.pg_faults) * 100)
+        return self.mem, self.pg_faults / (self.pg_faults + self.pg_hits) * 100, self.pg_hits / (
+                self.pg_faults + self.pg_hits) * 100, self.inter_hit_ratio, self.virtual_time
+
+    def inter_ratios(self, v_time):
+        if v_time % 250 == 0 and v_time != 0:
+            h = (self.pg_hits - self.temp_hit) / ((self.pg_faults - self.temp_fault) +
+                                                   (self.pg_hits - self.temp_hit)) * 100
+            self.inter_hit_ratio.append(float(h))
+            self.temp_hit = self.pg_hits
+            self.temp_fault = self.pg_faults
+
+            self.virtual_time.append(v_time)
 
     def replace_lir_block(self, pg_table, lir_size):
         temp_block = self.lir_stack.popitem(last=False)
@@ -78,12 +106,14 @@ class LIRS:
         self.lir_size -= 1
         return self.lir_size
 
-    def LIRS_Replace_Algorithm(self):
+    def LIRS_Replace_Algorithm(self, v_time):
         # Creating variables
         last_ref_block = -1
 
         for i in range(len(self.trace)):
             ref_block = self.trace[i]
+
+            self.inter_ratios(i)
 
             if ref_block == last_ref_block:
                 self.pg_hits += 1
@@ -137,10 +167,6 @@ class LIRS:
             self.pg_table[ref_block].in_stack = True
 
             last_ref_block = ref_block
-        self.result.write(f"{str(self.mem)},{str(self.pg_faults / (self.pg_hits + self.pg_faults) * 100)},{str(self.pg_hits / (self.pg_hits + self.pg_faults) * 100)}\n")
-        self.print_information(mem, self.pg_hits, self.pg_faults, self.HIR_SIZE)
-        self.info.write(f"{str(self.mem)},{str(self.in_stack_miss/len(self.trace))},{str(self.out_stack_hit/len(self.trace))}\n")
-        print("in stack miss: ", self.in_stack_miss, "out stack hit: ", self.out_stack_hit, "out stack miss: ", self.out_stack_miss)
     
 if __name__ == "__main__":
     if (len(sys.argv) != 2):
@@ -167,10 +193,10 @@ if __name__ == "__main__":
         print ("Successfully created the directory %s " % path)
 
     # Store the hit&miss ratio
-    result = open("result_set/" + tName + "/lirs_" + tName, "w")
-
+    result = 0
+    info = 0
     # in stack miss, out stack hit
-    info = open("result_set/" + tName + "/lirs_info_" + tName, "w")
+    # info = open("result_set/" + tName + "/lirs_info_" + tName, "w")
 
     # Get the trace parameter
     MAX_MEMORY = []
@@ -179,13 +205,13 @@ if __name__ == "__main__":
     for line in inputFile:
         if not line == "*\n":
             MAX_MEMORY.append(int(line))
-
+    FILE = WriteToFile(tName, tName)
     for mem in MAX_MEMORY:
+        RATIO_FILE = WriteToFile(tName, str(mem) + "_" + tName + "_ratios")
+        v_time = 0
         lirs = LIRS(trace, mem, result, info)
-        lirs.LIRS_Replace_Algorithm()
-    result.close()
-
-#     f = open("evictions.txt", "w")
-#     for i in range(len(eviction_list)):
-#         f.write(str(eviction_list[i]) + "\n")
-#     f.close()
+        lirs.LIRS_Replace_Algorithm(v_time)
+        mem, miss, hit, inter_hit_ratio, virtual_time = lirs.print_information()
+        FILE.write_to_file(str(mem), str(miss), str(hit))
+        for i in range(len(inter_hit_ratio)):
+            RATIO_FILE.write_to_file(str(virtual_time[i]), str(inter_hit_ratio[i]))

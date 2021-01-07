@@ -1,17 +1,21 @@
+"""
+model: naive bayes
+training data collection
+1. re-access
+2. demote from Rmax
+time to predict: use start time parameter
+feature:
+1. flattened position 2. is hir before
+"""
+
 import sys
 import os
 import numpy as np
 from sklearn.linear_model import SGDClassifier
 from sklearn.naive_bayes import BernoulliNB
 from sklearn.naive_bayes import MultinomialNB
-from sklearn.naive_bayes import ComplementNB
-from sklearn import linear_model
-from sklearn.multioutput import MultiOutputClassifier
-from sklearn.multioutput import MultiOutputRegressor
-from lightgbm import LGBMRegressor
 
 
-# Maybe change it from being based on non resident. Instead it is based on accesses. Everything above an access is in the boundary.
 class Node:
     def __init__(self, b_num):
         self.block_number = b_num
@@ -23,16 +27,22 @@ class Node:
         self.HIR_next = None
         self.recency = False  # Rmax boundary
         self.recency0 = False  # LRU boundary
+        self.dynamic_recency = False  # Non Resident Boundary
         self.refer_times = 0
         self.evicted_times = 0
         self.reuse_distance = 0
+        self.is_last_hit = False
+        """
+        in dynamic, in lru, in lir stack, out lir stack 
+        """
         self.position = [0, 0, 1]
+        self.last_is_hir = True
 
 
 class Trace:
-    def __init__(self, tName):
-        self.trace_path = '/Users/polskafly/PycharmProjects/ML_Cache/trace/' + tName
-        self.parameter_path = '/Users/polskafly/PycharmProjects/ML_Cache/cache_size/' + tName
+    def __init__(self, t_name):
+        self.trace_path = '/Users/polskafly/PycharmProjects/ML_Cache/trace/' + t_name
+        self.parameter_path = '/Users/polskafly/PycharmProjects/ML_Cache/cache_size/' + t_name
         self.trace = []
         self.memory_size = []
         self.vm_size = -1
@@ -57,17 +67,27 @@ class Trace:
                     self.memory_size.append(int(line.strip()))
         return self.memory_size
 
-
 class WriteToFile:
     def __init__(self, tName, fp):
         self.tName = tName
         __location__ = "/Users/polskafly/PycharmProjects/ML_Cache/result_set/" + tName
-        self.FILE = open(__location__ + "/ml_lirs_v7_" + fp, "w+")
+        self.FILE = open(__location__ + "/ml_lirs_v9_" + fp, "w+")
 
     def write_to_file(self, *args):
         data = ",".join(args)
         # Store the hit&miss ratio
         self.FILE.write(data + "\n")
+
+"""
+class Segment_Miss:
+    def __init__(self, tName, cache):
+        self.tName = tName
+        self.FILE = open(
+            "../result_set/" + self.tName + "/ml_lirs_v6_" + self.tName + "_" + str(cache) + "_segment_miss", "w")
+
+    def record(self, segment_miss_ratio):
+        self.FILE.write(str(segment_miss_ratio) + "\n")
+"""
 
 class LIRS_Replace_Algorithm:
     def __init__(self, t_name, vm_size, trace_dict, mem_size, trace_size, model, start_use_model, mini_batch):
@@ -76,8 +96,6 @@ class LIRS_Replace_Algorithm:
         for k, v in trace_dict.items():
             trace_dict[k] = Node(k)
 
-        self.hot_pred = 0
-        self.cold_pred = 0
         self.model = model
         self.trace_size = trace_size
         self.page_table = trace_dict  # {block number : Node}
@@ -89,8 +107,6 @@ class LIRS_Replace_Algorithm:
         if self.HIR_SIZE < MIN_HIR_MEMORY:
             self.HIR_SIZE = MIN_HIR_MEMORY
 
-        self.dynamic_init = False
-
         self.Stack_S_Head = None
         self.Sack_S_Tail = None
         self.Stack_Q_Head = None
@@ -99,6 +115,8 @@ class LIRS_Replace_Algorithm:
         self.lir_size = 0
         self.Rmax = None
         self.Rmax0 = None
+        self.inter_boundary = None
+        self.inter_lost = True
         self.Rmax0_lost = True
 
         self.page_fault = 0
@@ -108,7 +126,11 @@ class LIRS_Replace_Algorithm:
 
         self.inter_hit_ratio = []
         self.dynamic_ratio = []
+        self.lru_ratio = []
         self.virtual_time = []
+
+        self.page_fault = 0
+        self.page_hit = 0
 
         self.last_ref_block = -1
 
@@ -118,16 +140,24 @@ class LIRS_Replace_Algorithm:
         self.predict_times = 0
         self.predict_H_L = 0
         self.predict_L_H = 0
+        self.predict_H_H = 0
+        self.predict_L_L = 0
         self.out_stack_hit = 0
 
         self.mini_batch_X = np.array([])
         self.mini_batch_X = np.array([])
 
-        self.position_importance = {0: 1, 1: 2, 2: 3}
-
         self.start_use_model = start_use_model
         self.mini_batch = mini_batch
-        # self.start_use_model = mem_size * 2
+
+        # segment miss
+        self.epoch = self.trace_size // 100
+        self.last_miss = 0
+        # self.seg_file = Segment_Miss(t_name, mem_size)
+        self.positive_sampler = 0
+        self.negative_sampler = 0
+
+        self.hit = False
 
     def remove_stack_Q(self, b_num):
         if (not self.page_table[b_num].HIR_next and not self.page_table[b_num].HIR_prev):
@@ -164,6 +194,9 @@ class LIRS_Replace_Algorithm:
             self.Rmax = self.page_table[b_num].LIRS_prev
             self.find_new_Rmax()
 
+        if (self.page_table[b_num] == self.Rmax0):
+            self.Rmax0 = self.page_table[b_num].LIRS_prev
+
         if (self.page_table[b_num].LIRS_prev and self.page_table[b_num].LIRS_next):
             self.page_table[b_num].LIRS_prev.LIRS_next = self.page_table[b_num].LIRS_next
             self.page_table[b_num].LIRS_next.LIRS_prev = self.page_table[b_num].LIRS_prev
@@ -192,65 +225,23 @@ class LIRS_Replace_Algorithm:
 
     def find_new_Rmax(self):
         if (not self.Rmax):
-            raise ("Warning Rmax0 \n")
+            raise ("Warning Rmax \n")
         while self.Rmax.is_hir == True:
             self.Rmax.recency = False
-
-            if self.Rmax == self.Rmax0:
-                self.Rmax0 = self.find_new_Rmax0()
-
             self.Rmax = self.Rmax.LIRS_prev
 
-    #function to prune the dynamic stack normally
+    # Prunes to a new Rmax0
     def find_new_Rmax0(self):
-        if not self.Rmax0:
+        if (not self.Rmax0):
             raise ("Warning Rmax0 \n")
-        if not self.Rmax0.LIRS_prev:
-            return
         self.Rmax0.recency0 = False
-        ptr = self.Rmax0.LIRS_prev
-        while ptr:
-            if not ptr.is_resident:
-                break
-            if not ptr.LIRS_prev:
-                self.Rmax0_lost = True
-                break
-            ptr.recency0 = False
-            ptr = ptr.LIRS_prev
-        ptr.recency0 = True
-        self.Rmax0 = ptr
-
+        self.Rmax0 = self.Rmax0.LIRS_prev
         return self.Rmax0
-
-    #Function that when the Rmax0 is accessed, it searches downwards. Edge case.
-    def look_down(self):
-        if not self.Rmax0:
-            raise ("Warning Rmax0 \n")
-        ptr = self.Rmax0.LIRS_next
-        while ptr:
-            if not ptr.is_resident:
-                break
-            if ptr == self.Rmax:
-                self.Rmax0_lost = True
-                break
-            ptr.recency0 = True
-            ptr = ptr.LIRS_next
-        ptr.recency0 = True
-        self.Rmax0 = ptr
-
-    def get_reuse_distance(self, ref_block):
-        ptr = self.Stack_S_Head
-        count = 0
-        while ptr:
-            count += 1
-            if ptr.block_number == ref_block:
-                return count
-            ptr = ptr.LIRS_next
-        raise ("get reuse distance error!")
-
+    # Function that polls the hit ratio at different times in the trace
     def inter_ratios(self, v_time):
         if v_time % 250 == 0 and v_time != 0:
             counter = 0
+            counter_recency = 0
             total = 0
             h = (self.page_hit - self.temp_hit) / ((self.page_fault - self.temp_fault) +
                                                    (self.page_hit - self.temp_hit)) * 100
@@ -261,8 +252,11 @@ class LIRS_Replace_Algorithm:
             ptr = self.Rmax
             while ptr:
                 total += 1
-                if ptr.recency0:
+                if ptr.dynamic_recency:
                     counter += 1
+                if ptr.recency0:
+                    counter_recency += 1
+
                 ptr = ptr.LIRS_prev
             self.dynamic_ratio.append(float((counter / total) * 100))
             self.virtual_time.append(v_time)
@@ -270,12 +264,37 @@ class LIRS_Replace_Algorithm:
     def resident_number(self):
         count = 0
         for b_num, node in self.page_table.items():
-            if node.is_resident:
+            if (node.is_resident):
                 count += 1
         print(self.MEMORY_SIZE, count)
 
-    def generate_features(self, *feature):
-        pass
+    def collect_sampler(self, ref_block, label, *feature):
+        self.count_exampler += 1
+
+        features = []
+        for f in feature:
+            features += f
+        if (self.mini_batch_X.all()):
+            self.mini_batch_X = np.array([features])
+            self.mini_batch_Y = np.array([label])
+        else:
+            self.mini_batch_X = np.r_[self.mini_batch_X, [features]]
+            self.mini_batch_Y = np.r_[self.mini_batch_Y, [label]]
+
+        if (len(self.mini_batch_X) == self.mini_batch):
+            self.model.partial_fit(self.mini_batch_X, self.mini_batch_Y, classes=np.array([1, -1]))
+            self.mini_batch_X = np.array([])
+            self.mini_batch_Y = np.array([])
+
+        position = [0, 0, 0]
+
+        if (self.page_table[ref_block].recency0):
+            position[0] = 1
+        if (self.page_table[ref_block].recency):
+            position[1] = 1
+        if (not self.page_table[ref_block].recency):
+            position[2] = 1
+        self.page_table[ref_block].position = position
 
     def print_information(self):
         print("======== Results ========")
@@ -288,37 +307,24 @@ class LIRS_Replace_Algorithm:
         print("Hit ratio: ", self.page_hit / (self.page_fault + self.page_hit) * 100)
         print("Total: ", (self.page_fault + self.page_hit))
         print("Out stack hit : ", self.out_stack_hit)
-        print("Predict Hot: ", self.hot_pred)
-        print("Predict Cold: ", self.cold_pred)
         print("Predict Times =", self.predict_times, "H->L", self.predict_H_L, "L->H", self.predict_L_H)
         return self.MEMORY_SIZE, self.page_fault / (self.page_fault + self.page_hit) * 100, self.page_hit / (
                     self.page_fault + self.page_hit) * 100, self.inter_hit_ratio, self.dynamic_ratio, self.virtual_time
 
     def print_stack(self, v_time):
+        if (v_time < 7995):
+            return
         ptr = self.Stack_S_Head
         while (ptr):
             print("R" if ptr == self.Rmax0 else "", end="")
-            # print("H" if ptr.is_hir else "L", end="")
-            # print("R" if ptr.is_resident else "N", end="")
+            print("H" if ptr.is_hir else "L", end="")
+            print("r" if ptr.is_resident else "N", end="")
             print(ptr.block_number, end="-")
             ptr = ptr.LIRS_next
         print()
 
-    def debug_print(self):
-        count = 0
-        total = 0
-        ptr = self.Rmax
-        while ptr:
-            total += 1
-            if ptr.recency0:
-                count += 1
-            ptr = ptr.LIRS_prev
-        print(total)
-        print(count)
-        print(count/total)
-        print()
-
     def LIRS(self, v_time, ref_block):
+        self.hit = False
 
         self.inter_ratios(v_time)
 
@@ -332,38 +338,15 @@ class LIRS_Replace_Algorithm:
 
         self.last_ref_block = ref_block
         self.page_table[ref_block].refer_times += 1
-        if not self.page_table[ref_block].is_resident:
+        if (not self.page_table[ref_block].is_resident):
             self.page_fault += 1
-            # print (v_time, ref_block, 0)
-            # self.print_stack(v_time)
 
-            if self.Free_Memory_Size == 0:
+            if (self.Free_Memory_Size == 0):
                 self.Stack_Q_Tail.is_resident = False
                 self.Stack_Q_Tail.evicted_times += 1
-                # self.page_table[self.Stack_Q_Tail.block_number].is_resident = False
-
-                if self.Stack_Q_Tail.recency and self.Rmax0_lost:  # Initialization of dynamic stack.
-                    self.Rmax0 = self.Stack_Q_Tail
-                    isRmax0 = False
-                    ptr = self.Rmax
-                    while ptr:
-                        if ptr == self.Rmax0:
-                            isRmax0 = True
-                        if isRmax0:
-                            ptr.recency0 = True
-                        else:
-                            ptr.recency0 = False
-                        ptr = ptr.LIRS_prev
-                    self.Rmax0_lost = False
-
-                """
-                if self.Stack_Q_Tail.recency0 and not self.Rmax0_lost and (self.Stack_Q_Tail.evicted_times % 2) == 0:
-                    self.find_new_Rmax0()
-                """
-
                 self.remove_stack_Q(self.Stack_Q_Tail.block_number)  # func(): remove block in the tail of stack Q
                 self.Free_Memory_Size += 1
-            elif self.Free_Memory_Size > self.HIR_SIZE:
+            elif (self.Free_Memory_Size > self.HIR_SIZE):
                 self.page_table[ref_block].is_hir = False
                 self.lir_size += 1
 
@@ -371,82 +354,65 @@ class LIRS_Replace_Algorithm:
         elif (self.page_table[ref_block].is_hir):
             self.remove_stack_Q(ref_block)  # func():
 
-        if self.page_table[ref_block].is_resident:
+        if (self.page_table[ref_block].is_resident):
             self.page_hit += 1
+            self.hit = True
 
         # find new Rmax0
-        if self.Rmax0:
-            if self.Rmax0 == self.page_table[ref_block] and self.Rmax0 != self.Rmax: # if accessed block is rmax0, then prune to a new non res.
+        if (self.Rmax0 and not self.page_table[ref_block].recency0):
+            if (self.Rmax0 != self.page_table[ref_block]):
                 self.find_new_Rmax0()
 
-        if self.page_table[ref_block].refer_times > -1:
-            self.count_exampler += 1
-            # p_feature = self.position_importance[self.page_table[ref_block].position]
 
-            # self.model.partial_fit(np.array([[self.page_table[ref_block].reuse_distance, p_feature] + [1 if i == self.page_table[ref_block].position else 0 for i in range(3)]]), np.array([1 if self.page_table[ref_block].recency else -1], ), classes = np.array([1, -1]))
-            if self.mini_batch_X.all():
-                self.mini_batch_X = np.array(
-                    [self.page_table[ref_block].position +
-                     [self.page_table[ref_block].refer_times-self.page_table[ref_block].evicted_times]])
-                self.mini_batch_Y = np.array([1 if self.page_table[ref_block].recency else -1])
-            else:
-                # print(self.mini_batch_X)
-                # self.mini_batch_X = np.r_[self.mini_batch_X, [[p_feature] + [1 if i == self.page_table[ref_block].position else 0 for i in range(3)]]]
-                self.mini_batch_X = np.r_[
-                    self.mini_batch_X, [self.page_table[ref_block].position +
-                                        [self.page_table[ref_block].refer_times-self.page_table[ref_block].evicted_times]]]
-                self.mini_batch_Y = np.r_[self.mini_batch_Y, [1 if self.page_table[ref_block].recency else -1]]
-            if len(self.mini_batch_X) == self.mini_batch:
-                self.model.partial_fit(self.mini_batch_X, self.mini_batch_Y, classes=np.array([1, -1]))
-                self.mini_batch_X = np.array([])
-                self.mini_batch_Y = np.array([])
+        if (self.page_table[ref_block].refer_times > 0):
 
-            # type feature
-            position = [0, 0, 0]
-            if (self.page_table[ref_block].recency0):
-                position[0] = 1
             if (self.page_table[ref_block].recency):
-                position[1] = 1
-            if (not self.page_table[ref_block].recency):
-                position[2] = 1
-            self.page_table[ref_block].position = position
-            # self.page_table[ref_block].reuse_distance = self.get_reuse_distance(ref_block)  # Setting the reuse distance for that block
+                # collect positive sampler
+                self.collect_sampler(ref_block, 1, self.page_table[ref_block].position,
+                                     [self.page_table[ref_block].last_is_hir,
+                                      self.page_table[ref_block].refer_times - self.page_table[ref_block].evicted_times])
+            else:
+                self.collect_sampler(ref_block, -1, self.page_table[ref_block].position,
+                                     [self.page_table[ref_block].last_is_hir,
+                                      self.page_table[ref_block].refer_times - self.page_table[ref_block].evicted_times])
 
         # when use the data to predict the model
-        if self.count_exampler == self.start_use_model:
+        if (self.count_exampler > self.start_use_model and self.Free_Memory_Size == 0):
             self.train = True
 
         self.remove_stack_S(ref_block)
         self.add_stack_S(ref_block)
-        if self.Rmax0: #if there is an rmax0, then everytime a block is moved to the top of LIRS, it gets a recency0
-            if self.page_table[ref_block].recency0 and not self.page_table[ref_block].is_resident:
-                self.find_new_Rmax0()
 
+        if (self.Free_Memory_Size == 0 and not self.Rmax0):
+            self.Rmax0 = self.page_table[self.Rmax.block_number]
 
         self.page_table[ref_block].is_resident = True
 
         # start predict
-        if self.train:
-            feature = np.array([self.page_table[ref_block].position +
-                                [self.page_table[ref_block].refer_times-self.page_table[ref_block].evicted_times]])
+        if (self.train):
+            feature = np.array([self.page_table[ref_block].position + [self.page_table[ref_block].last_is_hir,
+                                      self.page_table[ref_block].refer_times - self.page_table[ref_block].evicted_times]])
+
             prediction = self.model.predict(feature.reshape(1, -1))
             self.predict_times += 1
+
             if (self.page_table[ref_block].is_hir):
                 if (prediction == 1):
                     # H -> L
-                    # self.lir_size += 1
+                    self.lir_size += 1
                     self.predict_H_L += 1
                     self.page_table[ref_block].is_hir = False
                     self.add_stack_Q(self.Rmax.block_number)  # func():
                     self.Rmax.is_hir = True
+                    self.lir_size -= 1
                     self.Rmax.recency = False
                     self.find_new_Rmax()
-                    self.hot_pred += 1
                 elif (prediction == -1):
                     # H -> H
+                    self.predict_H_H += 1
                     self.add_stack_Q(ref_block)  # func():
-                    self.cold_pred += 1
             else:
+                # print(prediction, self.lir_size, self.HIR_SIZE)
                 # if prev LIR
                 if (prediction == -1 and self.lir_size > self.HIR_SIZE):
                     # L -> H
@@ -463,6 +429,7 @@ class LIRS_Replace_Algorithm:
 
                 elif (prediction == 1):
                     # L -> L do nothing
+                    self.predict_L_L += 1
                     pass
         else:
             # origin lirs
@@ -474,15 +441,18 @@ class LIRS_Replace_Algorithm:
                 self.Rmax.is_hir = True
                 self.lir_size -= 1
                 self.Rmax.recency = False
+
                 self.find_new_Rmax()
             elif (self.page_table[ref_block].is_hir):
                 self.add_stack_Q(ref_block)  # func():
 
         self.page_table[ref_block].recency = True
-        if self.Rmax0:
-            self.page_table[ref_block].recency0 = True
+        self.page_table[ref_block].recency0 = True
+       # if self.inter_boundary:
+        #    self.page_table[ref_block].dynamic_recency = True
         self.page_table[ref_block].refer_times += 1
-
+        self.page_table[ref_block].last_is_hir = self.page_table[ref_block].is_hir
+        self.page_table[ref_block].is_last_hit = self.hit
 
 def main(t_name, start_predict, mini_batch):
     # result file
@@ -508,8 +478,8 @@ def main(t_name, start_predict, mini_batch):
 
 
 if __name__ == "__main__":
-    if (len(sys.argv) != 4):
-        raise ("usage: python3 XXX.py trace_name start_predict mini_batch")
+    # if (len(sys.argv) != 4):
+    #     raise("usage: python3 XXX.py trace_name start_predict mini_batch")
     t_name = sys.argv[1]
     start_predict = int(sys.argv[2])
     mini_batch = int(sys.argv[3])

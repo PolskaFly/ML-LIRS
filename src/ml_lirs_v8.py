@@ -5,6 +5,8 @@ from sklearn.linear_model import SGDClassifier
 from sklearn.naive_bayes import BernoulliNB
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.naive_bayes import ComplementNB
+from sklearn.naive_bayes import GaussianNB
+from sklearn import linear_model
 
 # Maybe change it from being based on non resident. Instead it is based on accesses. Everything above an access is in the boundary.
 class Node:
@@ -300,7 +302,7 @@ class LIRS_Replace_Algorithm:
         print()
 
     def inter_ratios(self, v_time):
-        if v_time % 50 == 0 and v_time != 0:
+        if v_time % 500 == 0 and v_time != 0:
             counter = 0
             total = 0
             h = (self.page_hit - self.temp_hit) / ((self.page_fault - self.temp_fault) +
@@ -490,7 +492,9 @@ def main(t_name, start_predict, mini_batch):
     memory_size = trace_obj.get_parameter()
     for memory in memory_size:
         RATIO_FILE = WriteToFile(t_name, str(memory) + "_" + t_name + "_ratios")
-        model = MultinomialNB()
+        # model = MultinomialNB()
+        #model = GaussianNB()
+        model = linear_model.BayesianRidge()
         lirs_replace = LIRS_Replace_Algorithm(t_name, trace_obj.vm_size, trace_dict, memory, trace_size, model,
                                               start_predict, mini_batch)
         for v_time, ref_block in enumerate(trace):

@@ -55,7 +55,7 @@ if __name__ == "__main__":
     miss_rate_set = []
     miss_rate_set.append(get_result("result_set/" + tName + "/lirs_" + tName))
     miss_rate_set.append(get_result("result_set/" + tName + "/lru_" + tName))
-    miss_rate_set.append(get_result("result_set/" + tName + "/ml_lirs_v8_" + tName))
+    miss_rate_set.append(get_result("result_set/" + tName + "/ml_lirs_v9_" + tName))
     miss_rate_set.append(get_result("result_set/" + tName + "/opt_" + tName))
 
     # Get the trace parameter
