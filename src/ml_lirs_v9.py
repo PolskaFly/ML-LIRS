@@ -5,7 +5,7 @@ training data collection
 2. demote from Rmax
 time to predict: use start time parameter
 feature:
-1. flattened position 2. is hir before
+1. flattened position 2. is hir before 3. Normalized Accesses
 """
 
 import sys
