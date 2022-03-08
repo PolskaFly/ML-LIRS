@@ -30,13 +30,12 @@ class Node:
         self.dynamic_recency = False  # Non Resident Boundary
         self.refer_times = 0
         self.evicted_times = 0
-        self.time_stamp = 0
         self.reuse_distance = 0
         self.is_last_hit = False
         """
         in dynamic, in lru, in lir stack, out lir stack 
         """
-        self.position = [0, 0, 1]
+        self.position = [0, 0, 0, 1]
         self.last_is_hir = True
 
 
@@ -72,7 +71,7 @@ class WriteToFile:
     def __init__(self, tName, fp):
         self.tName = tName
         __location__ = "/Users/polskafly/PycharmProjects/ML_Cache/result_set/" + tName
-        self.FILE = open(__location__ + "/ml_lirs_v9_" + fp, "w+")
+        self.FILE = open(__location__ + "/ml_lirs_v10_" + fp, "w+")
 
     def write_to_file(self, *args):
         data = ",".join(args)
@@ -130,12 +129,6 @@ class LIRS_Replace_Algorithm:
         self.lru_ratio = []
         self.virtual_time = []
 
-        self.ratio_performance = []
-        self.curr_performance = []
-
-        self.prev_binary_performance = -2
-        self.average_binary_performance = -2
-
         self.page_fault = 0
         self.page_hit = 0
 
@@ -153,8 +146,6 @@ class LIRS_Replace_Algorithm:
 
         self.mini_batch_X = np.array([])
         self.mini_batch_X = np.array([])
-
-        self.normalize_eviction = np.array([])
 
         self.start_use_model = start_use_model
         self.mini_batch = mini_batch
@@ -283,7 +274,6 @@ class LIRS_Replace_Algorithm:
         features = []
         for f in feature:
             features += f
-
         if (self.mini_batch_X.all()):
             self.mini_batch_X = np.array([features])
             self.mini_batch_Y = np.array([label])
@@ -295,17 +285,17 @@ class LIRS_Replace_Algorithm:
             self.model.partial_fit(self.mini_batch_X, self.mini_batch_Y, classes=np.array([1, -1]))
             self.mini_batch_X = np.array([])
             self.mini_batch_Y = np.array([])
-            #print("trained")
 
+        position = [0, 0, 0, 0]
 
-        position = [0, 0, 0]
-
-        if (self.page_table[ref_block].recency0):
+        if self.page_table[ref_block].recency0:
             position[0] = 1
-        if (self.page_table[ref_block].recency):
+        if self.page_table[ref_block].recency:
             position[1] = 1
-        if (not self.page_table[ref_block].recency):
+        if self.page_table[ref_block].is_hir and self.page_table[ref_block].is_resident:
             position[2] = 1
+        if not self.page_table[ref_block].recency:
+            position[3] = 1
         self.page_table[ref_block].position = position
 
     def print_information(self):
@@ -375,20 +365,18 @@ class LIRS_Replace_Algorithm:
             if (self.Rmax0 != self.page_table[ref_block]):
                 self.find_new_Rmax0()
 
-        self.page_table[ref_block].refer_times = ((self.page_table[ref_block].refer_times *
-                                                  pow(.9, (v_time - self.page_table[ref_block].time_stamp))) + 1)
 
-        if (self.page_table[ref_block].refer_times >= 1):
+        if (self.page_table[ref_block].refer_times > 0):
+
             if (self.page_table[ref_block].recency):
                 # collect positive sampler
-
                 self.collect_sampler(ref_block, 1, self.page_table[ref_block].position,
                                      [self.page_table[ref_block].last_is_hir,
-                                      self.page_table[ref_block].refer_times])
+                                      self.page_table[ref_block].refer_times - self.page_table[ref_block].evicted_times])
             else:
                 self.collect_sampler(ref_block, -1, self.page_table[ref_block].position,
                                      [self.page_table[ref_block].last_is_hir,
-                                      self.page_table[ref_block].refer_times])
+                                      self.page_table[ref_block].refer_times - self.page_table[ref_block].evicted_times])
 
         # when use the data to predict the model
         if (self.count_exampler > self.start_use_model and self.Free_Memory_Size == 0):
@@ -405,10 +393,9 @@ class LIRS_Replace_Algorithm:
         # start predict
         if (self.train):
             feature = np.array([self.page_table[ref_block].position + [self.page_table[ref_block].last_is_hir,
-                                                                       self.page_table[ref_block].refer_times]])
+                                      self.page_table[ref_block].refer_times - self.page_table[ref_block].evicted_times]])
 
             prediction = self.model.predict(feature.reshape(1, -1))
-
             self.predict_times += 1
 
             if (self.page_table[ref_block].is_hir):
@@ -463,9 +450,11 @@ class LIRS_Replace_Algorithm:
 
         self.page_table[ref_block].recency = True
         self.page_table[ref_block].recency0 = True
+       # if self.inter_boundary:
+        #    self.page_table[ref_block].dynamic_recency = True
+        self.page_table[ref_block].refer_times += 1
         self.page_table[ref_block].last_is_hir = self.page_table[ref_block].is_hir
         self.page_table[ref_block].is_last_hit = self.hit
-        self.page_table[ref_block].time_stamp = v_time
 
 def main(t_name, start_predict, mini_batch):
     # result file

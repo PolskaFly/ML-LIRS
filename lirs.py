@@ -10,6 +10,9 @@ class Block:
         self.is_resident = is_resident
         self.is_hir = is_hir_block
         self.in_stack = in_stack
+        self.prediction = -1
+        self.good_pred = 0
+        self.bad_pred = 0
 
 HIR_PERCENTAGE = 1.0
 MIN_HIR_MEMORY = 2
@@ -99,6 +102,7 @@ class LIRS:
 
     def replace_lir_block(self, pg_table, lir_size):
         temp_block = self.lir_stack.popitem(last=False)
+        self.pg_table[temp_block].prediction = 2
         self.pg_table[temp_block[1]].is_hir = True
         self.pg_table[temp_block[1]].in_stack = False
         self.hir_stack[temp_block[1]] = temp_block[1]
@@ -129,6 +133,14 @@ class LIRS:
                 self.out_stack_hit += 1
             if not self.pg_table[ref_block].is_resident and not self.pg_table[ref_block].in_stack:
                 self.out_stack_miss += 1
+            if self.pg_table[ref_block].prediction == 1 and self.pg_table[ref_block].is_resident and self.pg_table[ref_block].in_stack:
+                self.good_pred += 1
+            if self.pg_table[ref_block].prediction == 1 and not self.pg_table[ref_block].in_stack and self.pg_table[ref_block].is_resident:
+                self.bad_pred += 1
+            if self.pg_table[ref_block].prediction == 2 and not self.pg_table[ref_block].in_stack:
+                self.good_pred += 1
+            if self.pg_table[ref_block].prediction == 2 and self.pg_table[ref_block].is_resident and self.pg_table[ref_block].in_stack:
+                self.bad_pred += 1
 
             if not self.pg_table[ref_block].is_resident:
                 self.pg_faults += 1
@@ -138,6 +150,7 @@ class LIRS:
                     self.free_mem += 1
                 elif self.free_mem > self.HIR_SIZE:
                     self.pg_table[ref_block].is_hir = False
+                    self.pg_table[ref_block].prediction = 1
                     self.lir_size += 1
                 self.free_mem -= 1
             elif self.pg_table[ref_block].is_hir:
@@ -156,6 +169,7 @@ class LIRS:
 
             if self.pg_table[ref_block].is_hir and self.pg_table[ref_block].in_stack:
                 self.pg_table[ref_block].is_hir = False
+                self.pg_table[ref_block].prediction = 1
                 self.lir_size += 1
 
                 if self.lir_size > mem - self.HIR_SIZE:
