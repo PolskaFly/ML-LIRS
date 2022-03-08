@@ -15,5 +15,6 @@ Modification of the LIRS state of the art algorithm to make decisions based on a
 
 ML-LIRS attempts to make LIRS more dynamic and resilient to changes in access behavior that LIRS struggles with by using machine learning to make educated decisions on placement of new blocks in the LIRS data structure.
 
+Paper based on V9.
 
 
