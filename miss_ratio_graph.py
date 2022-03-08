@@ -10,18 +10,21 @@ algo = ['LIRS', 'LRU', 'ML-LIRS', 'OPT']
 colors = ['r', 'g', 'k', 'y', 'm', 'b']
 
 def plot(X, Y, tName):
+    plt.rc('xtick', labelsize=11)
+    plt.rc('ytick', labelsize=11)
+    #plt.grid(linestyle='-')
     for i, y in enumerate(Y):
         y = [float(_) for _ in y]
         plt.plot(X, y, color=colors[i], marker=markers[i], label=algo[i], alpha=0.6)
-    plt.title(tName)
-    plt.xlabel('Cache Size')
-    plt.ylabel('Miss Rate(%)')
+    # plt.title(tName)
+    plt.xlabel('Cache Size (# of blocks)', size=11)
+    plt.ylabel('Miss Rate(%)', size=11)
     plt.legend()
     """
     Set y axis begin at 0
     """
     plt.ylim(bottom=0)
-    plt.savefig("graph/miss_ratio/" + tName)
+    plt.savefig("graph/miss_ratio/" + tName, bbox_inches='tight', pad_inches=0)
     plt.close()
         
 def get_result(path):
