@@ -7,7 +7,7 @@
 # ML-LIRS Paper:
 [Official Paper](https://ieeexplore.ieee.org/document/9658438)
 
-Direct PDF provided in repo as well.
+[Direct Download](https://github.com/PolskaFly/machine-learned-cache/blob/master/ML_LIRS.pdf)
 
 # Brief Explanation:
 
