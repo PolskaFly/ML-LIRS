@@ -1,5 +1,5 @@
 # machine-learned-cache : Now ML-LIRS
-[Conference Presentation](https://youtu.be/GjVgxcQP3lM)
+[![Conference Presentation](https://img.youtube.com/vi/GjVgxcQP3lM/0.jpg)](https://youtu.be/GjVgxcQP3lM)
 
 Modification of the LIRS state of the art algorithm to make decisions based on a curated online gathered training set.
 
