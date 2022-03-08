@@ -5,8 +5,9 @@
 [![Conference Presentation](https://img.youtube.com/vi/GjVgxcQP3lM/0.jpg)](https://youtu.be/GjVgxcQP3lM)
 
 # ML-LIRS Paper:
-[Here](https://ieeexplore.ieee.org/document/9658438)
-As well as directly in the repo.
+[Official Paper](https://ieeexplore.ieee.org/document/9658438)
+
+Direct PDF provided in repo as well.
 
 # Brief Explanation:
 
