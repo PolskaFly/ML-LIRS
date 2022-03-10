@@ -26,7 +26,7 @@ import random
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# 64
+# 64, DQN Code thanks to https://unnatsingh.medium.com/deep-q-network-with-pytorch-d1ca6f40bfda.
 class QNetwork(nn.Module):
     """ Actor (Policy) Model."""
     def __init__(self, state_size,action_size, seed, fc1_unit=32,
