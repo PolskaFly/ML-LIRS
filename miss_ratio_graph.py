@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import codecs
+import os
 import sys
 
 WORK_SPACE = './myLirs/'
@@ -56,14 +57,14 @@ if __name__ == "__main__":
     tName = sys.argv[1]
 
     miss_rate_set = []
-    miss_rate_set.append(get_result("result_set/" + tName + "/lirs_" + tName))
-    miss_rate_set.append(get_result("result_set/" + tName + "/lru_" + tName))
-    miss_rate_set.append(get_result("result_set/" + tName + "/ml_lirs_v9_" + tName))
-    miss_rate_set.append(get_result("result_set/" + tName + "/opt_" + tName))
+    miss_rate_set.append(get_result(os.path.realpath(os.path.abspath("result_set\\" + tName + "\\lirs_" + tName))))
+    miss_rate_set.append(get_result(os.path.realpath(os.path.abspath("result_set\\" + tName + "\\lru_" + tName))))
+    miss_rate_set.append(get_result(os.path.realpath(os.path.abspath("result_set\\" + tName + "\\ml_lirs_v10_" + tName))))
+    miss_rate_set.append(get_result(os.path.realpath(os.path.abspath("result_set\\" + tName + "\\opt_" + tName))))
 
     # Get the trace parameter
     MAX_MEMORY = []
-    with codecs.open("cache_size/" + tName, "r", "UTF8") as inputFile:
+    with codecs.open("cache_size\\" + tName, "r", "UTF8") as inputFile:
         inputFile = inputFile.readlines()
     for line in inputFile:
         if not line == "*\n":

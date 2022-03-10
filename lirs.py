@@ -11,8 +11,6 @@ class Block:
         self.is_hir = is_hir_block
         self.in_stack = in_stack
         self.prediction = -1
-        self.good_pred = 0
-        self.bad_pred = 0
 
 HIR_PERCENTAGE = 1.0
 MIN_HIR_MEMORY = 2
@@ -20,8 +18,8 @@ MIN_HIR_MEMORY = 2
 class WriteToFile:
     def __init__(self, tName, fp):
         self.tName = tName
-        __location__ = "/Users/polskafly/PycharmProjects/ML_Cache/result_set/" + tName
-        self.FILE = open(__location__ + "/lirs_" + fp, "w+")
+        __location__ = "C:\\Users\\Amadeus\\Documents\\Code\\ML_LIRS\\result_set\\" + tName
+        self.FILE = open(__location__ + "\\lirs_" + fp, "w+")
 
     def write_to_file(self, *args):
         data = ",".join(args)
@@ -60,6 +58,9 @@ class LIRS:
 
         self.virtual_time = []
         self.inter_hit_ratio = []
+
+        self.good_pred = 0
+        self.bad_pred = 0
 
         self.lir_size = 0
 
@@ -102,7 +103,7 @@ class LIRS:
 
     def replace_lir_block(self, pg_table, lir_size):
         temp_block = self.lir_stack.popitem(last=False)
-        self.pg_table[temp_block].prediction = 2
+        self.pg_table[temp_block[1]].prediction = 2
         self.pg_table[temp_block[1]].is_hir = True
         self.pg_table[temp_block[1]].in_stack = False
         self.hir_stack[temp_block[1]] = temp_block[1]
@@ -133,13 +134,13 @@ class LIRS:
                 self.out_stack_hit += 1
             if not self.pg_table[ref_block].is_resident and not self.pg_table[ref_block].in_stack:
                 self.out_stack_miss += 1
-            if self.pg_table[ref_block].prediction == 1 and self.pg_table[ref_block].is_resident and self.pg_table[ref_block].in_stack:
+            if self.pg_table[ref_block].prediction == 1 and self.pg_table[ref_block].in_stack:
                 self.good_pred += 1
-            if self.pg_table[ref_block].prediction == 1 and not self.pg_table[ref_block].in_stack and self.pg_table[ref_block].is_resident:
+            if self.pg_table[ref_block].prediction == 1 and not self.pg_table[ref_block].in_stack:
                 self.bad_pred += 1
-            if self.pg_table[ref_block].prediction == 2 and not self.pg_table[ref_block].in_stack:
+            if self.pg_table[ref_block].prediction == 2 and not self.pg_table[ref_block].is_resident:
                 self.good_pred += 1
-            if self.pg_table[ref_block].prediction == 2 and self.pg_table[ref_block].is_resident and self.pg_table[ref_block].in_stack:
+            if self.pg_table[ref_block].prediction == 2 and self.pg_table[ref_block].is_resident:
                 self.bad_pred += 1
 
             if not self.pg_table[ref_block].is_resident:
@@ -150,7 +151,6 @@ class LIRS:
                     self.free_mem += 1
                 elif self.free_mem > self.HIR_SIZE:
                     self.pg_table[ref_block].is_hir = False
-                    self.pg_table[ref_block].prediction = 1
                     self.lir_size += 1
                 self.free_mem -= 1
             elif self.pg_table[ref_block].is_hir:
@@ -189,7 +189,7 @@ if __name__ == "__main__":
     # Read the trace
     tName = sys.argv[1]
     trace = []
-    with open('trace/' + tName, "r") as f:
+    with open('trace\\' + tName, "r") as f:
         for line in f.readlines():
             if not line == "*\n" and not line == "\n":
                 trace.append(int(line))
@@ -198,7 +198,7 @@ if __name__ == "__main__":
     vm_size = max(trace)
 
     # define the name of the directory to be created
-    path = "result_set/" + tName
+    path = "result_set\\" + tName
     try:
         os.mkdir(path)
     except OSError:
@@ -214,7 +214,7 @@ if __name__ == "__main__":
 
     # Get the trace parameter
     MAX_MEMORY = []
-    with codecs.open("cache_size/" + tName, "r", "UTF8") as inputFile:
+    with codecs.open("cache_size\\" + tName, "r", "UTF8") as inputFile:
         inputFile = inputFile.readlines()
     for line in inputFile:
         if not line == "*\n":

@@ -14,7 +14,204 @@ import numpy as np
 from sklearn.linear_model import SGDClassifier
 from sklearn.naive_bayes import BernoulliNB
 from sklearn.naive_bayes import MultinomialNB
+from sklearn.linear_model import Perceptron
 
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import torch.nn.functional as F
+
+from collections import namedtuple, deque
+import random
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+# 64
+class QNetwork(nn.Module):
+    """ Actor (Policy) Model."""
+    def __init__(self, state_size,action_size, seed, fc1_unit=32,
+                 fc2_unit = 32):
+        """
+        Initialize parameters and build model.
+        Params
+        =======
+            state_size (int): Dimension of each state
+            action_size (int): Dimension of each action
+            seed (int): Random seed
+            fc1_unit (int): Number of nodes in first hidden layer
+            fc2_unit (int): Number of nodes in second hidden layer
+        """
+        super(QNetwork,self).__init__() ## calls __init__ method of nn.Module class
+        self.seed = torch.manual_seed(seed)
+        self.fc1 = nn.Linear(state_size,fc1_unit)
+        self.fc2 = nn.Linear(fc1_unit,fc2_unit)
+        self.fc3 = nn.Linear(fc2_unit,action_size)
+        
+    def forward(self,x):
+        # x = state
+        """
+        Build a network that maps state -> action values.
+        """
+        x = F.relu(self.fc1(x))
+        x = F.relu(self.fc2(x))
+        return self.fc3(x)
+
+BUFFER_SIZE = int(2000)  #replay buffer size
+BATCH_SIZE = 64         # minibatch size
+GAMMA = 0.99            # discount factor
+TAU = 1e-3              # for soft update of target parameters
+LR = 5e-4               # learning rate
+UPDATE_EVERY = 4        # how often to update the network
+
+class Agent():
+    """Interacts with and learns form environment."""
+    
+    def __init__(self, state_size, action_size, seed, buffer):
+        """Initialize an Agent object.
+        
+        Params
+        =======
+            state_size (int): dimension of each state
+            action_size (int): dimension of each action
+            seed (int): random seed
+        """
+        
+        self.state_size = state_size
+        self.action_size = action_size
+        self.seed = random.seed(seed)
+        
+        
+        #Q- Network
+        self.qnetwork_local = QNetwork(state_size, action_size, seed).to(device)
+        self.qnetwork_target = QNetwork(state_size, action_size, seed).to(device)
+        
+        self.optimizer = optim.Adam(self.qnetwork_local.parameters(),lr=LR)
+        
+        # Replay memory 
+        self.memory = ReplayBuffer(action_size, buffer,BATCH_SIZE,seed)
+        # Initialize time step (for updating every UPDATE_EVERY steps)
+        self.t_step = 0
+        
+    def step(self, state, action, reward, next_step, done):
+        # Save experience in replay memory
+        self.memory.add(state, action, reward, next_step, done)
+
+        # Learn every UPDATE_EVERY time steps.
+        self.t_step = (self.t_step+1)% UPDATE_EVERY
+        if self.t_step == 0:
+            # If enough samples are available in memory, get radom subset and learn
+
+            if len(self.memory)>BATCH_SIZE:
+                experience = self.memory.sample()
+                self.learn(experience, GAMMA)
+    def act(self, state, eps = 0):
+        """Returns action for given state as per current policy
+        Params
+        =======
+            state (array_like): current state
+            eps (float): epsilon, for epsilon-greedy action selection
+        """
+        state = torch.from_numpy(state).float().unsqueeze(0).to(device)
+        self.qnetwork_local.eval()
+        with torch.no_grad():
+            action_values = self.qnetwork_local(state)
+        self.qnetwork_local.train()
+
+        #Epsilon -greedy action selction
+        if random.random() > eps:
+            return np.argmax(action_values.cpu().data.numpy())
+        else:
+            return random.choice(np.arange(self.action_size))
+            
+    def learn(self, experiences, gamma):
+        """Update value parameters using given batch of experience tuples.
+        Params
+        =======
+            experiences (Tuple[torch.Variable]): tuple of (s, a, r, s', done) tuples
+            gamma (float): discount factor
+        """
+        states, actions, rewards, next_state, dones = experiences
+        ## TODO: compute and minimize the loss
+        criterion = torch.nn.MSELoss()
+        # Local model is one which we need to train so it's in training mode
+        self.qnetwork_local.train()
+        # Target model is one with which we need to get our target so it's in evaluation mode
+        # So that when we do a forward pass with target model it does not calculate gradient.
+        # We will update target model weights with soft_update function
+        self.qnetwork_target.eval()
+        #shape of output from the model (batch_size,action_dim) = (64,4)
+        predicted_targets = self.qnetwork_local(states).gather(1,actions)
+    
+        with torch.no_grad():
+            labels_next = self.qnetwork_target(next_state).detach().max(1)[0].unsqueeze(1)
+
+        # .detach() ->  Returns a new Tensor, detached from the current graph.
+        labels = rewards + (gamma* labels_next*(1-dones))
+        
+        loss = criterion(predicted_targets,labels).to(device)
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+
+        # ------------------- update target network ------------------- #
+        self.soft_update(self.qnetwork_local,self.qnetwork_target,TAU)
+            
+    def soft_update(self, local_model, target_model, tau):
+        """Soft update model parameters.
+        θ_target = τ*θ_local + (1 - τ)*θ_target
+        Params
+        =======
+            local model (PyTorch model): weights will be copied from
+            target model (PyTorch model): weights will be copied to
+            tau (float): interpolation parameter
+        """
+        for target_param, local_param in zip(target_model.parameters(),
+                                           local_model.parameters()):
+            target_param.data.copy_(tau*local_param.data + (1-tau)*target_param.data)
+            
+class ReplayBuffer:
+    """Fixed -size buffe to store experience tuples."""
+    
+    def __init__(self, action_size, buffer_size, batch_size, seed):
+        """Initialize a ReplayBuffer object.
+        
+        Params
+        ======
+            action_size (int): dimension of each action
+            buffer_size (int): maximum size of buffer
+            batch_size (int): size of each training batch
+            seed (int): random seed
+        """
+        
+        self.action_size = action_size
+        self.memory = deque(maxlen=buffer_size)
+        self.batch_size = batch_size
+        self.experiences = namedtuple("Experience", field_names=["state",
+                                                               "action",
+                                                               "reward",
+                                                               "next_state",
+                                                               "done"])
+        self.seed = random.seed(seed)
+        
+    def add(self,state, action, reward, next_state,done):
+        """Add a new experience to memory."""
+        e = self.experiences(state,action,reward,next_state,done)
+        self.memory.append(e)
+        
+    def sample(self):
+        """Randomly sample a batch of experiences from memory"""
+        experiences = random.sample(self.memory,k=self.batch_size)
+        
+        states = torch.from_numpy(np.vstack([e.state for e in experiences if e is not None])).float().to(device)
+        actions = torch.from_numpy(np.vstack([e.action for e in experiences if e is not None])).long().to(device)
+        rewards = torch.from_numpy(np.vstack([e.reward for e in experiences if e is not None])).float().to(device)
+        next_states = torch.from_numpy(np.vstack([e.next_state for e in experiences if e is not None])).float().to(device)
+        dones = torch.from_numpy(np.vstack([e.done for e in experiences if e is not None]).astype(np.uint8)).float().to(device)
+        
+        return (states,actions,rewards,next_states,dones)
+    def __len__(self):
+        """Return the current size of internal memory."""
+        return len(self.memory)
 
 class Node:
     def __init__(self, b_num):
@@ -30,19 +227,22 @@ class Node:
         self.dynamic_recency = False  # Non Resident Boundary
         self.refer_times = 0
         self.evicted_times = 0
+        self.time_stamp = 0
         self.reuse_distance = 0
         self.is_last_hit = False
         """
         in dynamic, in lru, in lir stack, out lir stack 
         """
-        self.position = [0, 0, 0, 1]
+        self.position = [0, 0, 1]
         self.last_is_hir = True
+
+        self.last_prediction = 0
 
 
 class Trace:
     def __init__(self, t_name):
-        self.trace_path = '/Users/polskafly/PycharmProjects/ML_Cache/trace/' + t_name
-        self.parameter_path = '/Users/polskafly/PycharmProjects/ML_Cache/cache_size/' + t_name
+        self.trace_path = __location__ = os.path.join(__file__, "..", "..", "trace", t_name)
+        self.parameter_path = __location__ = os.path.join(__file__, "..", "..", "cache_size", t_name)
         self.trace = []
         self.memory_size = []
         self.vm_size = -1
@@ -70,24 +270,13 @@ class Trace:
 class WriteToFile:
     def __init__(self, tName, fp):
         self.tName = tName
-        __location__ = "/Users/polskafly/PycharmProjects/ML_Cache/result_set/" + tName
-        self.FILE = open(__location__ + "/ml_lirs_v10_" + fp, "w+")
+        __location__ = os.path.join(__file__, "..", "..", "result_set", tName)
+        self.FILE = open(__location__ + "\ml_lirs_v10_" + fp, "w+")
 
     def write_to_file(self, *args):
         data = ",".join(args)
         # Store the hit&miss ratio
         self.FILE.write(data + "\n")
-
-"""
-class Segment_Miss:
-    def __init__(self, tName, cache):
-        self.tName = tName
-        self.FILE = open(
-            "../result_set/" + self.tName + "/ml_lirs_v6_" + self.tName + "_" + str(cache) + "_segment_miss", "w")
-
-    def record(self, segment_miss_ratio):
-        self.FILE.write(str(segment_miss_ratio) + "\n")
-"""
 
 class LIRS_Replace_Algorithm:
     def __init__(self, t_name, vm_size, trace_dict, mem_size, trace_size, model, start_use_model, mini_batch):
@@ -129,8 +318,20 @@ class LIRS_Replace_Algorithm:
         self.lru_ratio = []
         self.virtual_time = []
 
+        self.ratio_performance = []
+        self.curr_performance = []
+
+        self.prev_binary_performance = -2
+        self.average_binary_performance = -2
+
         self.page_fault = 0
         self.page_hit = 0
+
+        self.cache_size_pg_fault = 0
+        self.cache_size_pg_hit = 0
+
+        self.prevHitRate = 0
+        self.broadPrevHitRate = 0
 
         self.last_ref_block = -1
 
@@ -147,6 +348,8 @@ class LIRS_Replace_Algorithm:
         self.mini_batch_X = np.array([])
         self.mini_batch_X = np.array([])
 
+        self.normalize_eviction = np.array([])
+
         self.start_use_model = start_use_model
         self.mini_batch = mini_batch
 
@@ -157,7 +360,15 @@ class LIRS_Replace_Algorithm:
         self.positive_sampler = 0
         self.negative_sampler = 0
 
+        self.good_decisions = 0
+        self.bad_decisions = 0
+
         self.hit = False
+
+        self.prevState = np.array([])
+
+        self.agent = Agent(state_size=5,action_size=2,seed=0, buffer=self.MEMORY_SIZE * 2)
+
 
     def remove_stack_Q(self, b_num):
         if (not self.page_table[b_num].HIR_next and not self.page_table[b_num].HIR_prev):
@@ -240,25 +451,12 @@ class LIRS_Replace_Algorithm:
     # Function that polls the hit ratio at different times in the trace
     def inter_ratios(self, v_time):
         if v_time % 250 == 0 and v_time != 0:
-            counter = 0
-            counter_recency = 0
-            total = 0
             h = (self.page_hit - self.temp_hit) / ((self.page_fault - self.temp_fault) +
                                                    (self.page_hit - self.temp_hit)) * 100
             self.inter_hit_ratio.append(float(h))
             self.temp_hit = self.page_hit
             self.temp_fault = self.page_fault
 
-            ptr = self.Rmax
-            while ptr:
-                total += 1
-                if ptr.dynamic_recency:
-                    counter += 1
-                if ptr.recency0:
-                    counter_recency += 1
-
-                ptr = ptr.LIRS_prev
-            self.dynamic_ratio.append(float((counter / total) * 100))
             self.virtual_time.append(v_time)
 
     def resident_number(self):
@@ -268,35 +466,24 @@ class LIRS_Replace_Algorithm:
                 count += 1
         print(self.MEMORY_SIZE, count)
 
-    def collect_sampler(self, ref_block, label, *feature):
+    def collect_sampler(self, ref_block, *feature):
         self.count_exampler += 1
 
         features = []
         for f in feature:
             features += f
-        if (self.mini_batch_X.all()):
-            self.mini_batch_X = np.array([features])
-            self.mini_batch_Y = np.array([label])
-        else:
-            self.mini_batch_X = np.r_[self.mini_batch_X, [features]]
-            self.mini_batch_Y = np.r_[self.mini_batch_Y, [label]]
 
-        if (len(self.mini_batch_X) == self.mini_batch):
-            self.model.partial_fit(self.mini_batch_X, self.mini_batch_Y, classes=np.array([1, -1]))
-            self.mini_batch_X = np.array([])
-            self.mini_batch_Y = np.array([])
+        position = [0, 0, 0]
 
-        position = [0, 0, 0, 0]
-
-        if self.page_table[ref_block].recency0:
+        if (self.page_table[ref_block].recency0):
             position[0] = 1
-        if self.page_table[ref_block].recency:
+        if (self.page_table[ref_block].recency):
             position[1] = 1
-        if self.page_table[ref_block].is_hir and self.page_table[ref_block].is_resident:
+        if (not self.page_table[ref_block].recency):
             position[2] = 1
-        if not self.page_table[ref_block].recency:
-            position[3] = 1
         self.page_table[ref_block].position = position
+
+        return np.array(features)
 
     def print_information(self):
         print("======== Results ========")
@@ -325,8 +512,21 @@ class LIRS_Replace_Algorithm:
             ptr = ptr.LIRS_next
         print()
 
+    def calculate_reward(self, prevHit, newHit):
+        newCalc = newHit - prevHit
+
+        if newCalc > 0:
+            return newCalc * 200
+        else:
+            return newCalc * 100
+
     def LIRS(self, v_time, ref_block):
         self.hit = False
+
+        if self.cache_size_pg_fault + self.cache_size_pg_hit == self.mini_batch:
+            self.cache_size_pg_fault = self.cache_size_pg_fault/2
+            self.cache_size_pg_hit = self.cache_size_pg_hit/2
+            self.broadPrevHitRate = (self.page_hit/(self.page_hit+self.page_fault))*100
 
         self.inter_ratios(v_time)
 
@@ -336,12 +536,14 @@ class LIRS_Replace_Algorithm:
 
         if (ref_block == self.last_ref_block):
             self.page_hit += 1
+            self.cache_size_pg_hit += 1
             return
 
         self.last_ref_block = ref_block
         self.page_table[ref_block].refer_times += 1
         if (not self.page_table[ref_block].is_resident):
             self.page_fault += 1
+            self.cache_size_pg_fault += 1
 
             if (self.Free_Memory_Size == 0):
                 self.Stack_Q_Tail.is_resident = False
@@ -358,6 +560,7 @@ class LIRS_Replace_Algorithm:
 
         if (self.page_table[ref_block].is_resident):
             self.page_hit += 1
+            self.cache_size_pg_hit += 1
             self.hit = True
 
         # find new Rmax0
@@ -365,18 +568,9 @@ class LIRS_Replace_Algorithm:
             if (self.Rmax0 != self.page_table[ref_block]):
                 self.find_new_Rmax0()
 
+        self.page_table[ref_block].refer_times = ((self.page_table[ref_block].refer_times *
+                                                  pow(.9, (v_time - self.page_table[ref_block].time_stamp))) + 1)
 
-        if (self.page_table[ref_block].refer_times > 0):
-
-            if (self.page_table[ref_block].recency):
-                # collect positive sampler
-                self.collect_sampler(ref_block, 1, self.page_table[ref_block].position,
-                                     [self.page_table[ref_block].last_is_hir,
-                                      self.page_table[ref_block].refer_times - self.page_table[ref_block].evicted_times])
-            else:
-                self.collect_sampler(ref_block, -1, self.page_table[ref_block].position,
-                                     [self.page_table[ref_block].last_is_hir,
-                                      self.page_table[ref_block].refer_times - self.page_table[ref_block].evicted_times])
 
         # when use the data to predict the model
         if (self.count_exampler > self.start_use_model and self.Free_Memory_Size == 0):
@@ -387,19 +581,26 @@ class LIRS_Replace_Algorithm:
 
         if (self.Free_Memory_Size == 0 and not self.Rmax0):
             self.Rmax0 = self.page_table[self.Rmax.block_number]
+        
 
         self.page_table[ref_block].is_resident = True
 
         # start predict
         if (self.train):
-            feature = np.array([self.page_table[ref_block].position + [self.page_table[ref_block].last_is_hir,
-                                      self.page_table[ref_block].refer_times - self.page_table[ref_block].evicted_times]])
+            state = self.collect_sampler(ref_block, self.page_table[ref_block].position,
+                                     [self.page_table[ref_block].last_is_hir,
+                                      self.page_table[ref_block].refer_times])
+            prediction = self.agent.act(state, .1)
 
-            prediction = self.model.predict(feature.reshape(1, -1))
+            #if self.broadPrevHitRate > (self.page_hit/(self.page_hit+self.page_fault))*100:
+            self.agent.step(self.prevState, prediction, self.calculate_reward(self.prevHitRate, (self.cache_size_pg_hit/(self.cache_size_pg_fault+self.cache_size_pg_hit))*100), state, False)
+
+            self.page_table[ref_block].last_prediction = prediction
+
             self.predict_times += 1
 
             if (self.page_table[ref_block].is_hir):
-                if (prediction == 1):
+                if (prediction == 0):
                     # H -> L
                     self.lir_size += 1
                     self.predict_H_L += 1
@@ -409,7 +610,7 @@ class LIRS_Replace_Algorithm:
                     self.lir_size -= 1
                     self.Rmax.recency = False
                     self.find_new_Rmax()
-                elif (prediction == -1):
+                elif (prediction == 1):
                     # H -> H
                     self.predict_H_H += 1
                     self.add_stack_Q(ref_block)  # func():
@@ -435,9 +636,16 @@ class LIRS_Replace_Algorithm:
                     pass
         else:
             # origin lirs
+            state = self.collect_sampler(ref_block, self.page_table[ref_block].position,
+                                     [self.page_table[ref_block].last_is_hir,
+                                      self.page_table[ref_block].refer_times])
+
+            action = None
             if (self.page_table[ref_block].is_hir and self.page_table[ref_block].recency):
                 self.page_table[ref_block].is_hir = False
                 self.lir_size += 1
+
+                self.page_table[ref_block].last_prediction = 1
 
                 self.add_stack_Q(self.Rmax.block_number)  # func():
                 self.Rmax.is_hir = True
@@ -445,16 +653,25 @@ class LIRS_Replace_Algorithm:
                 self.Rmax.recency = False
 
                 self.find_new_Rmax()
+
+                action = 0
             elif (self.page_table[ref_block].is_hir):
+                self.page_table[ref_block].last_prediction = -1
+                action = 1
                 self.add_stack_Q(ref_block)  # func():
+
+            if self.prevState.size > 0 and action != None:
+                self.agent.step(self.prevState, action, self.calculate_reward(self.prevHitRate, (self.cache_size_pg_hit/(self.cache_size_pg_fault+self.cache_size_pg_hit)*100)), state, False)
 
         self.page_table[ref_block].recency = True
         self.page_table[ref_block].recency0 = True
-       # if self.inter_boundary:
-        #    self.page_table[ref_block].dynamic_recency = True
-        self.page_table[ref_block].refer_times += 1
         self.page_table[ref_block].last_is_hir = self.page_table[ref_block].is_hir
         self.page_table[ref_block].is_last_hit = self.hit
+        self.page_table[ref_block].time_stamp = v_time
+
+        self.prevState = state
+
+        self.prevHitRate = (self.page_hit/(self.page_fault+self.page_hit)) * 100
 
 def main(t_name, start_predict, mini_batch):
     # result file
@@ -467,7 +684,7 @@ def main(t_name, start_predict, mini_batch):
     for memory in memory_size:
         RATIO_FILE = WriteToFile(t_name, str(memory) + "_" + t_name + "_ratios")
         model = MultinomialNB()
-        # model = SGDClassifier(loss="hinge", eta0=1, learning_rate="adaptive", n_jobs=-1)
+
         lirs_replace = LIRS_Replace_Algorithm(t_name, trace_obj.vm_size, trace_dict, memory, trace_size, model,
                                               start_predict, mini_batch)
         for v_time, ref_block in enumerate(trace):
@@ -476,7 +693,7 @@ def main(t_name, start_predict, mini_batch):
         memory_size, miss_ratio, hit_ratio, inter_hit_ratio, dynamic_ratio, virtual_time = lirs_replace.print_information()
         FILE.write_to_file(str(memory_size), str(miss_ratio), str(hit_ratio))
         for i in range(len(inter_hit_ratio)):
-            RATIO_FILE.write_to_file(str(virtual_time[i]), str(inter_hit_ratio[i]), str(dynamic_ratio[i]))
+            RATIO_FILE.write_to_file(str(virtual_time[i]), str(inter_hit_ratio[i]))
 
 
 if __name__ == "__main__":
