@@ -14,8 +14,8 @@ class Block:
 class WriteToFile:
     def __init__(self, tName, fp):
         self.tName = tName
-        __location__ = "/Users/polskafly/PycharmProjects/ML_Cache/result_set/" + tName
-        self.FILE = open(__location__ + "/lru_" + fp, "w+")
+        __location__ = "C:\\Users\\Amadeus\\Documents\\Code\\ML_LIRS\\result_set\\" + tName
+        self.FILE = open(__location__ + "\\lru_" + fp, "w+")
 
     def write_to_file(self, *args):
         data = ",".join(args)
@@ -93,7 +93,7 @@ if __name__ == "__main__":
     vm_size = max(trace)
 
     # define the name of the directory to be created
-    path = "result_set/" + tName
+    path = "result_set\\" + tName
     try:
         os.mkdir(path)
     except OSError:

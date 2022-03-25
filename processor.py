@@ -8,11 +8,11 @@ with open(trace_path, "r") as f:
     for line in f.readlines():
         if not line == "*\n" and not line.strip() == "":
             temp = line.split(" ")
-            trace.append(temp[0].strip())
+            trace.append(int(temp[0].strip()) - 110000000)
 
 max_lines = 100000
 with open(trace_path, "w") as f:
     for i, line in enumerate(trace):
-        f.write(line + "\n")
+        f.write(str(line) + "\n")
         if i == max_lines:
             break

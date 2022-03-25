@@ -6,9 +6,9 @@ import sys
 
 WORK_SPACE = './myLirs/'
 
-markers = ['X', 'o', 'v', '.', '+', '1']
-algo = ['LIRS', 'LRU', 'ML-LIRS', 'OPT']
-colors = ['r', 'g', 'k', 'y', 'm', 'b']
+markers = ['X', 'o', 'v', '.', '+', '1', '-', 't']
+algo = ['LIRS', 'LRU', 'ML-LIRS', 'OPT', 'LIRS BD Ratio', 'ML-LIRS BD Ratio']
+colors = ['r', 'g', 'k', 'y', 'm', 'b', 'b', 'b']
 
 def plot(X, Y, tName):
     plt.rc('xtick', labelsize=11)
@@ -43,11 +43,41 @@ def get_result(path):
             if not flt:
                 continue
             cache_size = int(flt[0].strip('l'))
-            t.append( (cache_size, flt[1], flt[2]))
+            try:
+                t.append( (cache_size, flt[1], flt[2], flt[3]))
+            except:
+                t.append( (cache_size, flt[1], flt[2]))
         t.sort(key=lambda x: x[0])
         
         for tp in t:
             res.append(float(tp[1]))
+        
+        return res
+
+def get_result_bd(path):
+    print(path + "..")
+    res = []
+    t = []
+    with open(path, 'r') as f:
+        for flt in f.readlines():
+            """
+            mCacheMaxLimit,
+            missRatio, 
+            100 - missRatio);
+            """
+            flt = flt.strip().split(',')
+            if not flt:
+                continue
+            cache_size = int(flt[0].strip('l'))
+            try:
+                t.append( (cache_size, flt[1], flt[2], flt[3]))
+            except:
+                t.append( (cache_size, flt[1], flt[2]))
+        t.sort(key=lambda x: x[0])
+        
+        for tp in t:
+            res.append(float(tp[3]))
+        
         return res
     
     
@@ -59,8 +89,11 @@ if __name__ == "__main__":
     miss_rate_set = []
     miss_rate_set.append(get_result(os.path.realpath(os.path.abspath("result_set\\" + tName + "\\lirs_" + tName))))
     miss_rate_set.append(get_result(os.path.realpath(os.path.abspath("result_set\\" + tName + "\\lru_" + tName))))
-    miss_rate_set.append(get_result(os.path.realpath(os.path.abspath("result_set\\" + tName + "\\ml_lirs_v10_" + tName))))
+    miss_rate_set.append(get_result(os.path.realpath(os.path.abspath("result_set\\" + tName + "\\ml_lirs_v9_" + tName))))
     miss_rate_set.append(get_result(os.path.realpath(os.path.abspath("result_set\\" + tName + "\\opt_" + tName))))
+
+    miss_rate_set.append(get_result_bd(os.path.realpath(os.path.abspath("result_set\\" + tName + "\\lirs_" + tName))))
+    miss_rate_set.append(get_result_bd(os.path.realpath(os.path.abspath("result_set\\" + tName + "\\ml_lirs_v9_" + tName))))
 
     # Get the trace parameter
     MAX_MEMORY = []

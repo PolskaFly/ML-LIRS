@@ -39,11 +39,14 @@ class Node:
         self.position = [0, 0, 1]
         self.last_is_hir = True
 
+        self.prediction = -1
+
+
 
 class Trace:
     def __init__(self, t_name):
-        self.trace_path = '/Users/polskafly/PycharmProjects/ML_Cache/trace/' + t_name
-        self.parameter_path = '/Users/polskafly/PycharmProjects/ML_Cache/cache_size/' + t_name
+        self.trace_path = __location__ = os.path.join(__file__, "..", "..", "trace", t_name)
+        self.parameter_path = __location__ = os.path.join(__file__, "..", "..", "cache_size", t_name)
         self.trace = []
         self.memory_size = []
         self.vm_size = -1
@@ -71,8 +74,8 @@ class Trace:
 class WriteToFile:
     def __init__(self, tName, fp):
         self.tName = tName
-        __location__ = "/Users/polskafly/PycharmProjects/ML_Cache/result_set/" + tName
-        self.FILE = open(__location__ + "/ml_lirs_v9_" + fp, "w+")
+        __location__ = "C:\\Users\\Amadeus\\Documents\\Code\\ML_LIRS\\result_set\\" + tName
+        self.FILE = open(__location__ + "\\ml_lirs_v9_" + fp, "w+")
 
     def write_to_file(self, *args):
         data = ",".join(args)
@@ -150,6 +153,9 @@ class LIRS_Replace_Algorithm:
         self.predict_H_H = 0
         self.predict_L_L = 0
         self.out_stack_hit = 0
+
+        self.good_pred = 0
+        self.bad_pred = 0
 
         self.mini_batch_X = np.array([])
         self.mini_batch_X = np.array([])
@@ -320,8 +326,11 @@ class LIRS_Replace_Algorithm:
         print("Total: ", (self.page_fault + self.page_hit))
         print("Out stack hit : ", self.out_stack_hit)
         print("Predict Times =", self.predict_times, "H->L", self.predict_H_L, "L->H", self.predict_L_H)
+        print("Good Decisions:", self.good_pred)
+        print("Bad Decisions:", self.bad_pred)
+        print("Bad Decision Ratio: ", (self.bad_pred/(self.bad_pred+self.good_pred)) * 100)
         return self.MEMORY_SIZE, self.page_fault / (self.page_fault + self.page_hit) * 100, self.page_hit / (
-                    self.page_fault + self.page_hit) * 100, self.inter_hit_ratio, self.dynamic_ratio, self.virtual_time
+                    self.page_fault + self.page_hit) * 100, self.inter_hit_ratio, self.dynamic_ratio, self.virtual_time, (self.bad_pred/(self.bad_pred+self.good_pred)) * 100
 
     def print_stack(self, v_time):
         if (v_time < 7995):
@@ -399,6 +408,17 @@ class LIRS_Replace_Algorithm:
 
         if (self.Free_Memory_Size == 0 and not self.Rmax0):
             self.Rmax0 = self.page_table[self.Rmax.block_number]
+        
+
+        if self.page_table[ref_block].prediction == 1 and not self.page_table[ref_block].is_resident and not self.page_table[ref_block].is_resident:
+            self.good_pred += 1
+        elif self.page_table[ref_block].prediction == 1 and (self.page_table[ref_block].is_resident or self.page_table[ref_block].is_resident):
+            self.bad_pred += 1
+        elif self.page_table[ref_block].prediction == 0 and self.page_table[ref_block].is_resident:
+            self.good_pred += 1
+        elif self.page_table[ref_block].prediction == 0 and not self.page_table[ref_block].is_resident:
+            self.bad_pred += 1
+
 
         self.page_table[ref_block].is_resident = True
 
@@ -454,12 +474,18 @@ class LIRS_Replace_Algorithm:
 
                 self.add_stack_Q(self.Rmax.block_number)  # func():
                 self.Rmax.is_hir = True
+        
                 self.lir_size -= 1
                 self.Rmax.recency = False
 
                 self.find_new_Rmax()
             elif (self.page_table[ref_block].is_hir):
                 self.add_stack_Q(ref_block)  # func():
+
+        if self.page_table[ref_block].is_hir:
+            self.page_table[ref_block].prediction = 1
+        else:
+            self.page_table[ref_block].prediction = 0
 
         self.page_table[ref_block].recency = True
         self.page_table[ref_block].recency0 = True
@@ -484,8 +510,8 @@ def main(t_name, start_predict, mini_batch):
         for v_time, ref_block in enumerate(trace):
             lirs_replace.LIRS(v_time, ref_block)
 
-        memory_size, miss_ratio, hit_ratio, inter_hit_ratio, dynamic_ratio, virtual_time = lirs_replace.print_information()
-        FILE.write_to_file(str(memory_size), str(miss_ratio), str(hit_ratio))
+        memory_size, miss_ratio, hit_ratio, inter_hit_ratio, dynamic_ratio, virtual_time, bad_decision = lirs_replace.print_information()
+        FILE.write_to_file(str(memory_size), str(miss_ratio), str(hit_ratio), str(bad_decision))
         for i in range(len(inter_hit_ratio)):
             RATIO_FILE.write_to_file(str(virtual_time[i]), str(inter_hit_ratio[i]), str(dynamic_ratio[i]))
 

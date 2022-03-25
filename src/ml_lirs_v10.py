@@ -238,6 +238,8 @@ class Node:
 
         self.last_prediction = 0
 
+        self.prediction = -1
+
 
 class Trace:
     def __init__(self, t_name):
@@ -360,8 +362,8 @@ class LIRS_Replace_Algorithm:
         self.positive_sampler = 0
         self.negative_sampler = 0
 
-        self.good_decisions = 0
-        self.bad_decisions = 0
+        self.good_pred = 0
+        self.bad_pred = 0
 
         self.hit = False
 
@@ -516,17 +518,15 @@ class LIRS_Replace_Algorithm:
         newCalc = newHit - prevHit
 
         if newCalc > 0:
-            return newCalc * 200
+            return newCalc * 500
         else:
-            return newCalc * 100
+            return newCalc * 1000
 
     def LIRS(self, v_time, ref_block):
         self.hit = False
 
-        if self.cache_size_pg_fault + self.cache_size_pg_hit == self.mini_batch:
-            self.cache_size_pg_fault = self.cache_size_pg_fault/2
-            self.cache_size_pg_hit = self.cache_size_pg_hit/2
-            self.broadPrevHitRate = (self.page_hit/(self.page_hit+self.page_fault))*100
+        if self.bad_pred + self.good_pred == self.mini_batch:
+            self.broadPrevHitRate = (self.bad_pred/(self.bad_pred+self.good_pred)) * 100
 
         self.inter_ratios(v_time)
 
@@ -582,6 +582,14 @@ class LIRS_Replace_Algorithm:
         if (self.Free_Memory_Size == 0 and not self.Rmax0):
             self.Rmax0 = self.page_table[self.Rmax.block_number]
         
+        if self.page_table[ref_block].prediction == 1 and not self.page_table[ref_block].is_resident and not self.page_table[ref_block].is_resident:
+            self.good_pred += 1
+        elif self.page_table[ref_block].prediction == 1 and (self.page_table[ref_block].is_resident or self.page_table[ref_block].is_resident):
+            self.bad_pred += 1
+        elif self.page_table[ref_block].prediction == 0 and self.page_table[ref_block].recency0:
+            self.good_pred += 1
+        elif self.page_table[ref_block].prediction == 0 and not self.page_table[ref_block].recency0:
+            self.bad_pred += 1
 
         self.page_table[ref_block].is_resident = True
 
@@ -593,7 +601,7 @@ class LIRS_Replace_Algorithm:
             prediction = self.agent.act(state, .1)
 
             #if self.broadPrevHitRate > (self.page_hit/(self.page_hit+self.page_fault))*100:
-            self.agent.step(self.prevState, prediction, self.calculate_reward(self.prevHitRate, (self.cache_size_pg_hit/(self.cache_size_pg_fault+self.cache_size_pg_hit))*100), state, False)
+            self.agent.step(self.prevState, prediction, self.calculate_reward(self.prevHitRate, (self.bad_pred/(self.bad_pred+self.good_pred)) * 100), state, False)
 
             self.page_table[ref_block].last_prediction = prediction
 
@@ -660,8 +668,14 @@ class LIRS_Replace_Algorithm:
                 action = 1
                 self.add_stack_Q(ref_block)  # func():
 
-            if self.prevState.size > 0 and action != None:
-                self.agent.step(self.prevState, action, self.calculate_reward(self.prevHitRate, (self.cache_size_pg_hit/(self.cache_size_pg_fault+self.cache_size_pg_hit)*100)), state, False)
+            if self.prevState.size > 0 and action != None and (self.bad_pred > 0 or self.good_pred > 0):
+                self.agent.step(self.prevState, action, self.calculate_reward(self.prevHitRate, (self.bad_pred/(self.bad_pred+self.good_pred)) * 100), state, False)
+
+
+        if self.page_table[ref_block].is_hir:
+            self.page_table[ref_block].prediction = 1
+        else:
+            self.page_table[ref_block].prediction = 0
 
         self.page_table[ref_block].recency = True
         self.page_table[ref_block].recency0 = True
